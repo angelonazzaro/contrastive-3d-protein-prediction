@@ -48,9 +48,3 @@ class ProteinGraphDataset(Dataset):
         except Exception as e:
             # Handle other exceptions with a custom message
             raise Exception(f"Error while reading file {graph_json_path}: {e}") from e
-
-# Create an instance of the ProteinGraphDataset
-custom_dataset = ProteinGraphDataset(dataset_dir='preprocessing/data/')
-
-# Create a DataLoader
-data_loader = DataLoader(custom_dataset, batch_size=64, shuffle=True)
