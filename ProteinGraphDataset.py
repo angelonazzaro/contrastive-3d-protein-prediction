@@ -9,6 +9,9 @@ class ProteinGraphDataset(Dataset):
         self.dataset_dir = dataset_dir
         self.response_format = response_format
 
+        self.dir_graph_files = [os.path.join(root, dir) for root, dirs, files in os.walk(dataset_dir) for dir
+                                in dirs]
+
         # Collect a list of paths for JSON files in the dataset directory
         # Filter the files based on the '_graph.json' suffix and root directory
         self.graph_files = [
@@ -48,3 +51,7 @@ class ProteinGraphDataset(Dataset):
         except Exception as e:
             # Handle other exceptions with a custom message
             raise Exception(f"Error while reading file {graph_json_path}: {e}") from e
+
+
+# Create an instance of the ProteinGraphDataset
+custom_dataset = ProteinGraphDataset(dataset_dir='preprocessing/data/')
