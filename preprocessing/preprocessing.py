@@ -84,9 +84,13 @@ def get_pdbs(dir_path: str, out_dir: str = 'data', response_format: str = 'json'
         if file_path.endswith(('.zip', '.gz', '.tar.gz', '.rar')):
             file_path = extract_compressed_file(file_path)
 
-        # Process PDB files
-        if not process_pdb_file(file_path, out_dir, response_format):
-            # Separate files that could not be parsed due API calls limitations
-            if not os.path.exists("FAILED_" + out_dir):
-                os.makedirs("FAILED_" + out_dir, exist_ok=True)
-                shutil.move(file_path, os.path.join("FAILED_" + out_dir, os.path.basename(file_path)))
+        # Check if the file still exists before processing
+        if os.path.exists(file_path):
+            # Process PDB files
+            if not process_pdb_file(file_path, out_dir, response_format):
+                # Separate files that could not be parsed due to API calls limitations
+                failed_dir = "FAILED_" + out_dir
+                if not os.path.exists(failed_dir):
+                    os.makedirs(failed_dir, exist_ok=True)
+                # Use os.path.basename to get the filename without the path
+                shutil.move(file_path, os.path.join(failed_dir, os.path.basename(file_path)))
