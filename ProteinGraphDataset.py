@@ -15,14 +15,11 @@ class ProteinGraphDataset(Dataset):
             os.path.join(root, file)
             for root, dirs, files in os.walk(dataset_dir)
             for file in files
-            if file.endswith('_graph.json') and root == 'preprocessing/data/'+file[:-11]
+            if file.endswith('_graph.json')
         ]
-
-        print("List of JSON files:", self.graph_files)
 
     def __len__(self):
         # Return the length of the dataset
-        print("Dataset length:", len(self.graph_files))
         return len(self.graph_files)
 
     def __getitem__(self, idx):
@@ -45,27 +42,15 @@ class ProteinGraphDataset(Dataset):
             adjacency_matrix = torch.Tensor(nx.adjacency_matrix(graph).todense())
 
             return adjacency_matrix
-        except FileNotFoundError:
-            # Handle the case where the file is not found
-            return None
+        except FileNotFoundError as e:
+            # Handle the case where the file is not found with a custom message
+            raise FileNotFoundError(f"File not found: {graph_json_path}") from e
         except Exception as e:
-            # Handle other exceptions and print an error message
-            print(f"Error while reading file {graph_json_path}: {e}")
-            return None
-
-def custom_collate(batch):
-    # Remove None values from the batch
-    batch = [item for item in batch if item is not None]
-
-    # Check if the batch is empty
-    if len(batch) == 0:
-        return torch.Tensor()  # Return an empty tensor
-
-    # Stack the tensors in the batch
-    return torch.stack(batch)
+            # Handle other exceptions with a custom message
+            raise Exception(f"Error while reading file {graph_json_path}: {e}") from e
 
 # Create an instance of the ProteinGraphDataset
 custom_dataset = ProteinGraphDataset(dataset_dir='preprocessing/data/')
 
-# Create a DataLoader with custom collation function
-data_loader = DataLoader(custom_dataset, batch_size=64, shuffle=True, collate_fn=custom_collate)
+# Create a DataLoader
+data_loader = DataLoader(custom_dataset, batch_size=64, shuffle=True)
