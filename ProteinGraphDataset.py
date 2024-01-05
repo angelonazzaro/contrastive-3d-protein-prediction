@@ -5,12 +5,8 @@ import json
 import networkx as nx
 
 class ProteinGraphDataset(Dataset):
-    def __init__(self, dataset_dir, response_format='json'):
+    def __init__(self, dataset_dir):
         self.dataset_dir = dataset_dir
-        self.response_format = response_format
-
-        self.dir_graph_files = [os.path.join(root, dir) for root, dirs, files in os.walk(dataset_dir) for dir
-                                in dirs]
 
         # Collect a list of paths for JSON files in the dataset directory
         # Filter the files based on the '_graph.json' suffix and root directory
