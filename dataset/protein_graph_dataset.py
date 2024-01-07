@@ -1,37 +1,63 @@
 import torch
-from torch.utils.data import Dataset
 import os
-import json
-import networkx as nx
+import os.path as osp
+
+from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
+from torch_geometric.utils.convert import from_networkx
+from graphein.protein.graphs import construct_graph
+from preprocessing import extract_compressed_file
+from tqdm import tqdm
 
 
 class ProteinGraphDataset(Dataset):
-    def __init__(self, dataset_dir):
-        self.dataset_dir = dataset_dir
+    raw_url = "https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/UP000000805_243232_METJA_v4.tar"
 
-        # Collect a list of paths for JSON files in the dataset directory
-        # Filter the files based on the '_graph.json' suffix and root directory
-        self.graph_files = [os.path.join(root, file) for root, dirs, files in os.walk(dataset_dir) for file in files \
-                            if file.endswith('_graph.json')]
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        self.data, self.slices = torch.load(self.processed_paths[0])
 
-    def __len__(self):
-        # Return the length of the dataset
-        return len(self.graph_files)
+    @property
+    def raw_file_names(self):
+        if not os.path.exists(self.raw_dir):
+            return []
 
-    def __getitem__(self, idx):
-        try:
-            # Attempt to open and load the JSON file
-            with open(self.graph_files[idx], 'r') as json_file:
-                graph_data = json.load(json_file)
+        return [filename for filename in os.listdir(self.raw_dir)
+                if os.path.isfile(os.path.join(self.raw_dir, filename)) and '.pdb' in filename]
 
-            # Create a networkx graph from the loaded data
-            graph = nx.node_link_graph(graph_data)
+    @property
+    def processed_file_names(self):
+        if not os.path.exists(self.processed_dir):
+            return []
 
-            # Convert the graph's adjacency matrix to a PyTorch tensor
-            return torch.Tensor(nx.adjacency_matrix(graph).todense())
-        except FileNotFoundError as e:
-            # Handle the case where the file is not found with a custom message
-            raise FileNotFoundError(f"File not found: {self.graph_files[idx]}") from e
-        except Exception as e:
-            # Handle other exceptions with a custom message
-            raise Exception(f"Error while reading file {self.graph_files[idx]}: {e}") from e
+        processed_file_names = [filename for filename in os.listdir(self.processed_dir)]
+
+        return processed_file_names if len(processed_file_names) == len(self.raw_paths) else []
+
+    def download(self):
+        file_path = download_url(self.raw_url, self.raw_dir)
+        file_path_ext = os.path.splitext(file_path)[1]
+
+        if file_path_ext == ".zip":
+            extract_zip(file_path, self.raw_dir)
+        elif file_path_ext == ".tar":
+            extract_tar(file_path, self.raw_dir, mode='r')
+        elif file_path_ext == ".gz":
+            extract_gz(file_path, self.raw_dir)
+        else:
+            raise Exception(f"{file_path_ext} file not supported. Supported types are: ['.zip', '.tar', '.gz']")
+
+        os.unlink(file_path)
+
+    def process(self):
+        for idx, raw_path in enumerate(tqdm(self.raw_paths, desc="Processing files", unit="file")):
+            filename = os.path.basename(extract_compressed_file(raw_path))
+            protein_name = filename.split('-')[1]
+            pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, verbose=False))
+
+            torch.save(pyg_graph, osp.join(self.processed_dir, f'data_{idx}.pt'))
+
+    def len(self):
+        return len(self.processed_file_names)
+
+    def get(self, idx):
+        return torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
