@@ -4,6 +4,7 @@ import os
 import shutil
 import networkx as nx
 import json
+import numpy as np
 
 from tqdm import tqdm
 from Bio.PDB import PDBParser
@@ -22,11 +23,28 @@ def extract_compressed_file(file_path: str):
     return extracted_file_path
 
 
+def calculate_dihedral_angle(p1, p2, p3, p4):
+    b1 = -1.0 * (p2 - p1)
+    b2 = p3 - p2
+    b3 = p4 - p3
+
+    b2 /= np.linalg.norm(b2)
+
+    v = b1 - np.dot(b1, b2) * b2
+    w = b3 - np.dot(b3, b2) * b2
+
+    x = np.dot(v, w)
+    y = np.dot(np.cross(b2, v), w)
+
+    return np.degrees(np.arctan2(y, x))
+
+
 def process_pdb_file(file_path: str, out_dir: str, response_format: str = 'json') -> bool:
     """
     Process a PDB file: get protein uniqid, extract the graph from the pdb file and
     move everything to the appropriate directory.
     """
+
     filename = os.path.basename(file_path)
     protein_name = filename.split('-')[1]
     r = requests.get(url=BASE_URL + protein_name + '.' + response_format)
@@ -55,18 +73,54 @@ def process_pdb_file(file_path: str, out_dir: str, response_format: str = 'json'
                 # Add nodes for each residue
                 for residue in chain:
                     for atom in residue:
-                        graph.add_node(residue.id, atom_type=atom.get_name(), amino_acid=residue.resname)
+                        node_attrs = {
+                            'atom_type': atom.get_name(),
+                            'amino_acid': residue.resname,
+                            'coordinates': atom.get_coord().tolist()
+                        }
+                        graph.add_node(residue.id, **node_attrs)
+
                 # Add edges between consecutive residues in the chain
                 residues = list(chain)
                 for i in range(len(residues) - 1):
-                    graph.add_edge(residues[i].id, residues[i + 1].id)
+                    # Calculate the physical distance between connected amino acids
+                    distance = np.linalg.norm(residues[i + 1]["CA"].get_coord() - residues[i]["CA"].get_coord())
+                    graph.add_edge(residues[i].id, residues[i + 1].id, distance=distance)
+
+                    # Calculate the torsion angle and store it in the edge data
+                    if i >= 2:
+                        angle = calculate_dihedral_angle(
+                            residues[i - 2]["CA"].get_coord(),
+                            residues[i - 1]["CA"].get_coord(),
+                            residues[i]["CA"].get_coord(),
+                            residues[i + 1]["CA"].get_coord()
+                        )
+                        graph.edges[(residues[i - 1].id, residues[i].id)]['torsion_angle'] = angle
+
+                    # Add information about covalent bonds
+                    covalent_bonds = ["C-N", "N-C", "C-O", "O-C", "N-CA", "CA-N"]
+                    for bond_type in covalent_bonds:
+                        bond_atoms = bond_type.split('-')
+                        if bond_atoms[0] in residues[i] and bond_atoms[1] in residues[i + 1]:
+                            graph.edges[(residues[i].id, residues[i + 1].id)][bond_type] = True
 
         # Save the graph to a JSON file
         graph_json_path = protein_dir + os.sep + protein_name + '_graph.json'
+
         # Serialize the graph to JSON format
         graph_data = nx.node_link_data(graph)
+
+        # Convert non-serializable types to serializable types
+        def convert_to_serializable(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, np.float32):
+                return float(obj)
+            else:
+                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
         with open(graph_json_path, 'w') as json_file:
-            json.dump(graph_data, json_file)
+            json.dump(graph_data, json_file, default=convert_to_serializable)
         return True
     else:
         return False
