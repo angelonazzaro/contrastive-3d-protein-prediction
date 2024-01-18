@@ -55,7 +55,13 @@ def process_pdb_file(file_path: str, out_dir: str, response_format: str = 'json'
                 # Add nodes for each residue
                 for residue in chain:
                     for atom in residue:
-                        graph.add_node(residue.id, atom_type=atom.get_name(), amino_acid=residue.resname)
+                        node_attrs = {
+                            'atom_type': atom.get_name(),
+                            'amino_acid': residue.resname,
+                            'coordinates': atom.get_coord().tolist()
+                        }
+                        graph.add_node(residue.id, **node_attrs)
+
                 # Add edges between consecutive residues in the chain
                 residues = list(chain)
                 for i in range(len(residues) - 1):

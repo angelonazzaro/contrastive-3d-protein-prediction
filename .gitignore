@@ -5,6 +5,8 @@ __pycache__/
 
 data/
 
+dataset/UP000000805_243232_METJA_v4
+
 # C extensions
 *.so
 
