@@ -10,10 +10,10 @@ from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_
 from graphein.protein.graphs import construct_graph
 from graphein.protein.config import ProteinGraphConfig
 
-from preprocessing import extract_compressed_file
+from preprocessing import extract_compressed_file, NodeFeatureFormatter
 from tqdm import tqdm
 
-EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, hydrogen_bond_donor, hydrogen_bond_acceptor, add_atomic_edges]
+EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, add_atomic_edges]
 NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
 
 
@@ -23,6 +23,7 @@ class ProteinGraphDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0])
+        self.transform = transform
 
     @property
     def raw_file_names(self):
@@ -72,4 +73,7 @@ class ProteinGraphDataset(Dataset):
         return len(self.processed_file_names)
 
     def get(self, idx):
-        return torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+        data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+        if self.transform:
+            return self.transform(data)
+        return data
