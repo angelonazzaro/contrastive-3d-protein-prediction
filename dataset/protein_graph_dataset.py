@@ -4,9 +4,17 @@ import os.path as osp
 
 from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
 from torch_geometric.utils.convert import from_networkx
+
+from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
+    hydrogen_bond_donor, hydrogen_bond_acceptor, add_atomic_edges
 from graphein.protein.graphs import construct_graph
+from graphein.protein.config import ProteinGraphConfig
+
 from preprocessing import extract_compressed_file
 from tqdm import tqdm
+
+EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, hydrogen_bond_donor, hydrogen_bond_acceptor, add_atomic_edges]
+NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
 
 
 class ProteinGraphDataset(Dataset):
@@ -52,7 +60,11 @@ class ProteinGraphDataset(Dataset):
         for idx, raw_path in enumerate(tqdm(self.raw_paths, desc="Processing files", unit="file")):
             filename = os.path.basename(extract_compressed_file(raw_path))
             protein_name = filename.split('-')[1]
-            pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, verbose=False))
+
+            config = ProteinGraphConfig(edge_construction_functions=EDGE_CONSTRUCTION_FUNCTIONS,
+                                        node_metadata_functions=NODE_METADATA_FUNCTIONS)
+
+            pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, config=config, verbose=False))
 
             torch.save(pyg_graph, osp.join(self.processed_dir, f'data_{idx}.pt'))
 
