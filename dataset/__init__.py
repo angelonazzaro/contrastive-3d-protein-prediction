@@ -1,1 +1,1 @@
-from protein_graph_dataset import *
+from .protein_graph_dataset import *
