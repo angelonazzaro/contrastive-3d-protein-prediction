@@ -47,5 +47,14 @@ class NodeFeatureFormatter(BaseTransform):
 
         return graph
 
+
 class EdgeFeatureFormatter(BaseTransform):
-    pass
+    def __init__(self, feature_columns: Optional[list[str]] = None):
+        self.feature_columns = feature_columns if feature_columns is not None else []
+
+    def __call__(self, graph: Union[Data, HeteroData]):
+        for feature_col in self.feature_columns:
+            graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
+            graph["edge_attr"] = torch.cat([graph["edge_attr"], graph[feature_col]], dim=-1)  # combine node features
+
+        return graph

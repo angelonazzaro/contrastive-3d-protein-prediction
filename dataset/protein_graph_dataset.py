@@ -1,17 +1,16 @@
-import torch
 import os
 import os.path as osp
 
+import torch
+from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
+    add_atomic_edges
+from graphein.protein.config import ProteinGraphConfig
+from graphein.protein.graphs import construct_graph
 from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
 from torch_geometric.utils.convert import from_networkx
-
-from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
-    hydrogen_bond_donor, hydrogen_bond_acceptor, add_atomic_edges
-from graphein.protein.graphs import construct_graph
-from graphein.protein.config import ProteinGraphConfig
-
-from preprocessing import extract_compressed_file, NodeFeatureFormatter
 from tqdm import tqdm
+
+from preprocessing import extract_compressed_file
 
 EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, add_atomic_edges]
 NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
@@ -75,5 +74,9 @@ class ProteinGraphDataset(Dataset):
     def get(self, idx):
         data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
         if self.transform:
+            if isinstance(self.transform, list):
+                for transform in self.transform:
+                    data = transform(data)
+                return data
             return self.transform(data)
         return data
