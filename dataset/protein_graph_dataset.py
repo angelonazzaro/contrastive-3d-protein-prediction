@@ -79,6 +79,3 @@ class ProteinGraphDataset(Dataset):
 
     def get(self, idx):
         return torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
-
-x = ProteinGraphDataset(root="../data", pre_transform=[NodeFeatureFormatter(["amino_acid_one_hot"]), EdgeFeatureFormatter(["distance", "kind"])]);
-x[0]
