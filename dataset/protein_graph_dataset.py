@@ -10,7 +10,7 @@ from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz,
 from torch_geometric.utils.convert import from_networkx
 from tqdm import tqdm
 
-from preprocessing import extract_compressed_file
+from preprocessing import extract_compressed_file, NodeFeatureFormatter, EdgeFeatureFormatter
 
 EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, add_atomic_edges]
 NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
@@ -22,7 +22,6 @@ class ProteinGraphDataset(Dataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0])
-        self.transform = transform
 
     @property
     def raw_file_names(self):
@@ -66,17 +65,20 @@ class ProteinGraphDataset(Dataset):
 
             pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, config=config, verbose=False))
 
+            if self.pre_transform:
+                if isinstance(self.pre_transform, list):
+                    for pre_transform in self.pre_transform:
+                        pyg_graph = pre_transform(pyg_graph)
+                else:
+                    pyg_graph = self.pre_transform(pyg_graph)
+
             torch.save(pyg_graph, osp.join(self.processed_dir, f'data_{idx}.pt'))
 
     def len(self):
         return len(self.processed_file_names)
 
     def get(self, idx):
-        data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
-        if self.transform:
-            if isinstance(self.transform, list):
-                for transform in self.transform:
-                    data = transform(data)
-                return data
-            return self.transform(data)
-        return data
+        return torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+
+x = ProteinGraphDataset(root="../data", pre_transform=[NodeFeatureFormatter(["amino_acid_one_hot"]), EdgeFeatureFormatter(["distance", "kind"])]);
+x[0]
