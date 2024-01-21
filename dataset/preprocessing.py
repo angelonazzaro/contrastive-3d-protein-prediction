@@ -31,8 +31,9 @@ class NodeFeatureFormatter(BaseTransform):
         graph["x"] = graph["coords"]
 
         for feature_col in self.feature_columns:
-            graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
-            graph["x"] = torch.cat([graph["x"], graph[feature_col]], dim=-1)  # combine node features
+            if feature_col in graph:
+                graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
+                graph["x"] = torch.cat([graph["x"], graph[feature_col]], dim=-1)  # combine node features
 
         if NM_EIGENVALUES in graph and len(graph[NM_EIGENVALUES].shape) > 1:
             graph[NM_EIGENVALUES] = graph[NM_EIGENVALUES][0]  # get only one copy not one for each node
@@ -57,8 +58,9 @@ class EdgeFeatureFormatter(BaseTransform):
             graph.edge_attr = torch.empty(graph.num_edges, graph.num_edge_features)
 
         for feature_col in self.feature_columns:
-            graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
-            graph.edge_attr = torch.cat([graph.edge_attr, graph[feature_col].unsqueeze(1)], dim=-1)  # combine edge
-            # features
+            if feature_col in graph:
+                graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
+                graph.edge_attr = torch.cat([graph.edge_attr, graph[feature_col].unsqueeze(1)], dim=-1)  # combine edge
+                # features
 
         return graph
