@@ -10,7 +10,7 @@ from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz,
 from torch_geometric.utils.convert import from_networkx
 from tqdm import tqdm
 
-from preprocessing import extract_compressed_file, NodeFeatureFormatter, EdgeFeatureFormatter
+from preprocessing import extract_compressed_file
 
 EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, add_atomic_edges]
 NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]

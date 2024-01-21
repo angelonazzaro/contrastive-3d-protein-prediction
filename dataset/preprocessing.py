@@ -58,7 +58,7 @@ class EdgeFeatureFormatter(BaseTransform):
 
         for feature_col in self.feature_columns:
             graph[feature_col] = torch.Tensor(graph[feature_col])  # convert to tensor
-            graph.edge_attr = torch.cat([graph.edge_attr, graph[feature_col].unsqueeze(1)], dim=-1) # combine edge
+            graph.edge_attr = torch.cat([graph.edge_attr, graph[feature_col].unsqueeze(1)], dim=-1)  # combine edge
             # features
 
         return graph
