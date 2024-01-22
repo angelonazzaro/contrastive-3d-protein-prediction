@@ -6,7 +6,7 @@ import torch
 from torch_geometric.data import Data, HeteroData
 from torch_geometric.transforms import BaseTransform
 
-from .constants import NM_EIGENVALUES
+from dataset.constants import NM_EIGENVALUES
 
 
 def extract_compressed_file(file_path: str):
