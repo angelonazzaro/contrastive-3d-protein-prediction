@@ -56,18 +56,3 @@ class ContrastiveLoss(torch.nn.Module):
             return {"loss": loss, "labels": labels, "logits": logits}
         else:
             return loss
-
-
-if __name__ == "__main__":
-    batch_size = 8
-    embedding_size = 10
-
-    z1 = torch.randn(batch_size, embedding_size)
-    z2 = torch.randn(batch_size, embedding_size)
-
-    contrastive_loss = ContrastiveLoss(temperature=0.5)
-
-    details = contrastive_loss(z1, z2, return_details=True)
-    print("Contrastive Loss:", details["loss"].item())
-    print("Labels:", details["labels"])
-    print("Logits:", details["logits"])
