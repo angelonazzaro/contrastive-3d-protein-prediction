@@ -16,15 +16,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 from math import ceil
-from typing import Optional, Any
+
 import torch
 from torch import nn
 from torch.nn import functional as F
 from torch_geometric.nn.dense import DenseSAGEConv, dense_diff_pool
 from torch_geometric.utils import to_dense_batch, to_dense_adj
-# from torch_geometric.transforms import ToDense
-from torchmetrics.functional import accuracy, precision, recall, f1_score
 
+from models.classifiers import MulticlassClassificationLoss, GraphClassifier
 
 NUM_SAGE_LAYERS = 3
 
@@ -209,59 +208,6 @@ class DiffPool(GraphClassifier):
         if apply_second_linear:
             x = self.lin2(x)
         return x, l_total, e_total
-
-    def test(self,
-             y,
-             y_hat: Optional[Any] = None,
-             x: Optional[torch.Tensor] = None,
-             edge_index: Optional[torch.Tensor] = None,
-             batch_index: torch.Tensor = None,
-             criterion: ClassificationLoss = DiffPoolMulticlassClassificationLoss(),
-             top_k: Optional[int] = None,
-             *args, **kwargs) -> (float, Optional[float], float, float, float, float):
-        """
-        This function takes in a graph, and returns the loss, accuracy, top-k accuracy, precision, recall, and F1-score.
-
-        :param x: torch.Tensor = The node features
-        :type x: torch.Tensor
-        :param edge_index: The edge indices of the graph
-        :type edge_index: torch.Tensor
-        :param y: The target labels
-        :param batch_index: The batch index of the nodes
-        :type batch_index: torch.Tensor
-        :param criterion: The loss function to use
-        :type criterion: Callable
-        :param top_k: k for computing top_k accuracy, *args, **kwargs
-        :type top_k: Optional[int]
-        :return: The loss, accuracy, top-k accuracy, precision, recall, and F1-score.
-        """
-
-        # Get the number of classes
-        n_classes = self.dim_target
-
-        # Get predictions
-        if y_hat is None:
-            y_hat = self(x, edge_index, batch_index, *args, **kwargs)
-
-        # Compute loss
-        loss = self.loss(y_hat=y_hat, y=y, criterion=criterion)
-
-        # Remove additional loss terms
-        if isinstance(y_hat, tuple):
-            y_hat = y_hat[0]
-
-        # Compute the metrics
-        acc = accuracy(preds=y_hat, target=y, task='multiclass', average="macro", num_classes=n_classes)
-        if top_k is not None:
-            top_k_acc = float(accuracy(preds=y_hat, target=y, task='multiclass', num_classes=n_classes, top_k=top_k,
-                                       average="macro"))
-        else:
-            top_k_acc = None
-        prec = precision(preds=y_hat, target=y, task='multiclass', num_classes=n_classes, average="macro")
-        rec = recall(preds=y_hat, target=y, task='multiclass', num_classes=n_classes, average="macro")
-        f1 = f1_score(preds=y_hat, target=y, task='multiclass', num_classes=n_classes, average="macro")
-
-        return float(loss), float(acc), top_k_acc, prec, rec, f1
 
 
 class DiffPoolEmbedding(DiffPool):
