@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 
+
 class ContrastiveLoss(torch.nn.Module):
     def __init__(self, temperature=0.5):
         """
@@ -51,3 +52,21 @@ class ContrastiveLoss(torch.nn.Module):
         loss = F.cross_entropy(logits, labels)
 
         return loss
+
+
+if __name__ == "__main__":
+    # Create sample data
+    batch_size = 8
+    embedding_size = 10
+
+    z1 = torch.randn(batch_size, embedding_size)
+    z2 = torch.randn(batch_size, embedding_size)
+
+    # Initialize the ContrastiveLoss
+    contrastive_loss = ContrastiveLoss(temperature=0.5)
+
+    # Forward pass
+    loss = contrastive_loss(z1, z2)
+
+    # Print the loss
+    print("Contrastive Loss:", loss.item())
