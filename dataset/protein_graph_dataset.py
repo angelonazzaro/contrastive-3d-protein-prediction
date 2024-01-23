@@ -60,15 +60,81 @@ class ProteinGraphDataset(Dataset):
             filename = osp.basename(extract_compressed_file(raw_path))
             protein_name = filename.split('-')[1]
 
-            config = ProteinGraphConfig(edge_construction_functions=EDGE_CONSTRUCTION_FUNCTIONS,
-                                        node_metadata_functions=NODE_METADATA_FUNCTIONS)
+            config = ProteinGraphConfig()
 
-            pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, config=config, verbose=False))
+            pyg_graph = self.construct_detailed_graph(uniprot_id=protein_name, config=config, verbose=False)
 
             torch.save(self.__apply_transform(pyg_graph, "pre_transform"),
                        osp.join(self.processed_dir, f'data_{idx}.pt'))
 
             os.unlink(osp.join(self.raw_dir, filename))
+
+    def construct_detailed_graph(self, uniprot_id, config, verbose=False):
+        G = construct_graph(uniprot_id=uniprot_id, config=config, verbose=verbose)
+
+        for model in G:
+            for chain in model:
+                residues = list(chain)
+                self.calculate_bond_distances_angles(G, residues)
+
+                for i in range(len(residues) - 1):
+                    distance = np.linalg.norm(residues[i + 1]["CA"].get_coord() - residues[i]["CA"].get_coord())
+                    G.add_edge(residues[i].id, residues[i + 1].id, distance=distance)
+
+                    if i >= 2:
+                        angle = self.calculate_dihedral_angle(
+                            residues[i - 2]["CA"].get_coord(),
+                            residues[i - 1]["CA"].get_coord(),
+                            residues[i]["CA"].get_coord(),
+                            residues[i + 1]["CA"].get_coord()
+                        )
+                        G.edges[(residues[i - 1].id, residues[i].id)]['torsion_angle'] = angle
+
+                    covalent_bonds = ["C-N", "N-C", "C-O", "O-C", "N-CA", "CA-N"]
+                    for bond_type in covalent_bonds:
+                        bond_atoms = bond_type.split('-')
+                        if bond_atoms[0] in residues[i] and bond_atoms[1] in residues[i + 1]:
+                            G.edges[(residues[i].id, residues[i + 1].id)][bond_type] = True
+
+        return G
+
+    def calculate_bond_distances_angles(self, G, residues):
+        for i in range(len(residues) - 1):
+            distance = np.linalg.norm(residues[i + 1]["CA"].get_coord() - residues[i]["CA"].get_coord())
+            G.add_edge(residues[i].id, residues[i + 1].id, distance=distance)
+
+            if i >= 2:
+                angle = self.calculate_dihedral_angle(
+                    residues[i - 2]["CA"].get_coord(),
+                    residues[i - 1]["CA"].get_coord(),
+                    residues[i]["CA"].get_coord(),
+                    residues[i + 1]["CA"].get_coord()
+                )
+                G.edges[(residues[i - 1].id, residues[i].id)]['torsion_angle'] = angle
+
+            covalent_bonds = ["C-N", "N-C", "C-O", "O-C", "N-CA", "CA-N"]
+            for bond_type in covalent_bonds:
+                bond_atoms = bond_type.split('-')
+                if bond_atoms[0] in residues[i] and bond_atoms[1] in residues[i + 1]:
+                    G.edges[(residues[i].id, residues[i + 1].id)][bond_type] = True
+
+    def calculate_dihedral_angle(self, p1, p2, p3, p4):
+        b1 = -1.0 * (p2 - p1)
+        b2 = p3 - p2
+        b3 = p4 - p3
+
+        b2 /= np.linalg.norm(b2)
+
+        v = b1 - np.dot(b1, b2) * b2
+        w = b3 - np.dot(b3, b2) * b2
+
+        x = np.dot(v, w)
+        y = np.dot(np.cross(b2, v), w)
+
+        return np.degrees(np.arctan2(y, x))
+
+    def get_coordinates_from_atom(self, atom):
+        return atom.get_coord().tolist()
 
     def len(self):
         return len(self.processed_file_names)
