@@ -1,45 +1,48 @@
-import torch
 import os
 import os.path as osp
-import networkx as nx
-import numpy as np
+import glob
 
+import torch
+from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
+    add_atomic_edges
+from graphein.protein.config import ProteinGraphConfig
+from graphein.protein.graphs import construct_graph
 from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
 from torch_geometric.utils.convert import from_networkx
-
-from graphein.protein.graphs import construct_graph
-from graphein.protein.config import ProteinGraphConfig
-
 from tqdm import tqdm
+
 from dataset.preprocessing import extract_compressed_file
+
+EDGE_CONSTRUCTION_FUNCTIONS = [add_aromatic_interactions, add_atomic_edges]
+NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
+
 
 class ProteinGraphDataset(Dataset):
     raw_url = "https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/UP000000805_243232_METJA_v4.tar"
 
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
-        self.data, self.slices = torch.load(self.processed_paths[0])
 
     @property
     def raw_file_names(self):
-        if not os.path.exists(self.raw_dir):
+        if not osp.exists(self.raw_dir):
             return []
 
         return [filename for filename in os.listdir(self.raw_dir)
-                if os.path.isfile(os.path.join(self.raw_dir, filename)) and '.pdb' in filename]
+                if osp.isfile(osp.join(self.raw_dir, filename)) and filename.endswith(".pdb.gz")]
 
     @property
     def processed_file_names(self):
-        if not os.path.exists(self.processed_dir):
+        if not osp.exists(self.processed_dir):
             return []
 
-        processed_file_names = [filename for filename in os.listdir(self.processed_dir)]
+        processed_file_names = glob.glob(osp.join(self.processed_dir, "data_*.pt"))
 
         return processed_file_names if len(processed_file_names) == len(self.raw_paths) else []
 
     def download(self):
         file_path = download_url(self.raw_url, self.raw_dir)
-        file_path_ext = os.path.splitext(file_path)[1]
+        file_path_ext = osp.splitext(file_path)[1]
 
         if file_path_ext == ".zip":
             extract_zip(file_path, self.raw_dir)
@@ -54,14 +57,17 @@ class ProteinGraphDataset(Dataset):
 
     def process(self):
         for idx, raw_path in enumerate(tqdm(self.raw_paths, desc="Processing files", unit="file")):
-            filename = os.path.basename(extract_compressed_file(raw_path))
+            filename = osp.basename(extract_compressed_file(raw_path))
             protein_name = filename.split('-')[1]
 
             config = ProteinGraphConfig()
 
             pyg_graph = self.construct_detailed_graph(uniprot_id=protein_name, config=config, verbose=False)
 
-            torch.save(pyg_graph, osp.join(self.processed_dir, f'data_{idx}.pt'))
+            torch.save(self.__apply_transform(pyg_graph, "pre_transform"),
+                       osp.join(self.processed_dir, f'data_{idx}.pt'))
+
+            os.unlink(osp.join(self.raw_dir, filename))
 
     def construct_detailed_graph(self, uniprot_id, config, verbose=False):
         G = construct_graph(uniprot_id=uniprot_id, config=config, verbose=verbose)
@@ -133,5 +139,15 @@ class ProteinGraphDataset(Dataset):
     def len(self):
         return len(self.processed_file_names)
 
+    def __apply_transform(self, sample, attr):
+        attr = getattr(self, attr)
+        if attr:
+            if isinstance(attr, list):
+                for t in attr:
+                    sample = t(sample)
+            else:
+                sample = attr(sample)
+        return sample
+
     def get(self, idx):
-        return torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+        return self.__apply_transform(torch.load(osp.join(self.processed_dir, f'data_{idx}.pt')), "transform")
