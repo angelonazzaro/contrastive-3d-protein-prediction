@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 
 class ContrastiveLoss(torch.nn.Module):
-    def __init__(self, temperature=0.5):
+    def __init__(self, temperature: float = 0.5):
         """
         Contrastive Loss initialization.
 
@@ -13,16 +13,17 @@ class ContrastiveLoss(torch.nn.Module):
         super(ContrastiveLoss, self).__init__()
         self.temperature = temperature
 
-    def forward(self, z1, z2):
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor, return_details: bool = False):
         """
         Forward pass of the Contrastive Loss.
 
         Args:
             z1 (torch.Tensor): Representations from the first set of samples.
             z2 (torch.Tensor): Representations from the second set of samples.
+            return_details (bool): If True, return a dictionary with loss, labels, and logits.
 
         Returns:
-            torch.Tensor: Contrastive loss value.
+            torch.Tensor or dict: Contrastive loss value or a dictionary containing loss, labels, and logits.
         """
         # Normalize representations
         z1 = F.normalize(z1, dim=1, p=2)
@@ -51,22 +52,22 @@ class ContrastiveLoss(torch.nn.Module):
 
         loss = F.cross_entropy(logits, labels)
 
-        return loss
+        if return_details:
+            return {"loss": loss, "labels": labels, "logits": logits}
+        else:
+            return loss
 
 
 if __name__ == "__main__":
-    # Create sample data
     batch_size = 8
     embedding_size = 10
 
     z1 = torch.randn(batch_size, embedding_size)
     z2 = torch.randn(batch_size, embedding_size)
 
-    # Initialize the ContrastiveLoss
     contrastive_loss = ContrastiveLoss(temperature=0.5)
 
-    # Forward pass
-    loss = contrastive_loss(z1, z2)
-
-    # Print the loss
-    print("Contrastive Loss:", loss.item())
+    details = contrastive_loss(z1, z2, return_details=True)
+    print("Contrastive Loss:", details["loss"].item())
+    print("Labels:", details["labels"])
+    print("Logits:", details["logits"])
