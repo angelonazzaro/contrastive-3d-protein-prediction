@@ -22,16 +22,6 @@ class C3DPNet(nn.Module):
         self.loss = ContrastiveLoss()
         self.device = torch_device('cpu', 0)
 
-        self._iter = 0
-        self._size_current = 0
-        self._loss = 0
-        self._lr = 0
-        self._params = 0
-        self._time_used = 0
-        self._true = []
-        self._pred = []
-        self._custom_stats = {}
-
     def forward(self):
         pass
 
