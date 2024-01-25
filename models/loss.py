@@ -3,15 +3,17 @@ import torch.nn.functional as F
 
 
 class ContrastiveLoss(torch.nn.Module):
-    def __init__(self, temperature: float = 0.5):
+    def __init__(self, temperature: float = 0.5, use_sigmoid: bool = False):
         """
         Contrastive Loss initialization.
 
         Args:
             temperature (float): A hyperparameter controlling the scale of the similarity.
+            use_sigmoid (bool): If True, use the sigmoid function instead of cross entropy.
         """
         super(ContrastiveLoss, self).__init__()
         self.temperature = temperature
+        self.use_sigmoid = use_sigmoid
 
     def forward(self, z1: torch.Tensor, z2: torch.Tensor, return_details: bool = False):
         """
@@ -50,7 +52,13 @@ class ContrastiveLoss(torch.nn.Module):
         logits = torch.cat([positive_samples, negative_samples], dim=1)
         labels = torch.zeros(logits.size(0)).to(z1.device).long()
 
-        loss = F.cross_entropy(logits, labels)
+        if self.use_sigmoid:
+            # Use sigmoid function
+            sigmoid_output = torch.sigmoid(logits)
+            loss = F.binary_cross_entropy(sigmoid_output, labels.float())
+        else:
+            # Use cross entropy
+            loss = F.cross_entropy(logits, labels)
 
         if return_details:
             return {"loss": loss, "labels": labels, "logits": logits}
