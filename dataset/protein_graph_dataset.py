@@ -37,8 +37,7 @@ class ProteinGraphDataset(Dataset):
             return []
 
         processed_file_names = glob.glob(osp.join(self.processed_dir, "data_*.pt"))
-
-        return processed_file_names if len(processed_file_names) == len(self.raw_paths) else []
+        return [osp.basename(filename) for filename in processed_file_names]
 
     def download(self):
         file_path = download_url(self.raw_url, self.raw_dir)
