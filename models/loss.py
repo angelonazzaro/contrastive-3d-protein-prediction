@@ -13,14 +13,14 @@ class ContrastiveLoss(torch.nn.Module):
         super(ContrastiveLoss, self).__init__()
         self.temperature = temperature
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor, return_details: bool = False):
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor, return_dict: bool = False):
         """
         Forward pass of the Contrastive Loss.
 
         Args:
             z1 (torch.Tensor): Representations from the first set of samples.
             z2 (torch.Tensor): Representations from the second set of samples.
-            return_details (bool): If True, return a dictionary with loss, labels, and logits.
+            return_dict (bool): If True, return a dictionary with loss, labels, and logits.
 
         Returns:
             torch.Tensor or dict: Contrastive loss value or a dictionary containing loss, labels, and logits.
@@ -30,7 +30,7 @@ class ContrastiveLoss(torch.nn.Module):
         z2 = F.normalize(z2, dim=1, p=2)
 
         # Concatenate representations to form positive and negative batches
-        representations = torch.cat([z1, z2], dim=0)
+        representations = torch.cat([z1, z2], dim=1)
 
         # Compute the similarity matrix (dot product)
         similarity_matrix = torch.matmul(representations, representations.T) / self.temperature
@@ -52,7 +52,7 @@ class ContrastiveLoss(torch.nn.Module):
 
         loss = F.cross_entropy(logits, labels)
 
-        if return_details:
+        if return_dict:
             return {"loss": loss, "labels": labels, "logits": logits}
         else:
             return loss

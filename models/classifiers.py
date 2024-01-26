@@ -6,6 +6,7 @@ import torch
 from torchmetrics.functional import accuracy, precision, recall, f1_score
 
 
+# original source: https://github.com/Attornado/protein-representation-learning/
 class ClassificationLoss(torch.nn.Module, abc.ABC):
     def __init__(self):
         super().__init__()
@@ -67,7 +68,7 @@ class MulticlassClassificationLoss(ClassificationLoss):
         return torch.argmax(outputs, dim=1)
 
 
-class GraphClassifier():
+class GraphClassifier:
     def __init__(self, dim_features: int, dim_target: int, config: dict):
         """
         Generic graph classifier abstract class.
