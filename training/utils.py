@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -60,9 +61,33 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def seed_everything(seed: int):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+def get_splits(n_instances: int, train_split_percentage: float, val_split_percentage: float) -> Tuple[int, int, int]:
+    """
+    Calculate dataset splits based on specified percentages.
+
+    Args:
+        n_instances (int): Total number of instances.
+        train_split_percentage (float): Percentage of instances for the training split.
+        val_split_percentage (float): Percentage of instances for the validation split.
+
+    Returns:
+        Tuple[int, int, int]: Number of instances for training, validation, and test splits.
+    """
+
+    if train_split_percentage == 0 and val_split_percentage == 0:
+        return 0, 0, n_instances
+
+    train_split = int(n_instances * train_split_percentage / 100)
+    remaining_split = n_instances - train_split
+    val_split = int(n_instances * val_split_percentage / 100)
+    test_split = remaining_split - val_split
+
+    # If no test set is required, then test_split is just remainder, that we can add to the train
+    if train_split_percentage + val_split_percentage >= 100.0:
+        train_split = train_split + test_split
+        test_split = 0
+
+    return train_split, val_split, test_split
+
+def train_model(model: torch.nn.Module, train_dataloader, val_dataloader, epochs, optimizer):
+    pass

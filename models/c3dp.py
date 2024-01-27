@@ -51,10 +51,10 @@ class C3DPNet(nn.Module):
         for primary_sequence in batch.sequence_A:
             dna_inputs_list.append(self.dna_tokenizer(primary_sequence, return_tensors="pt", padding='max_length',
                                                       max_length=DNA_MAX_SEQUENCE_LENGTH, truncation=True)["input_ids"])
-        dna_inputs = torch.cat(dna_inputs_list)
+        dna_inputs = torch.cat(dna_inputs_list).to(self.device)
         dna_hidden_states = self.dna_model(dna_inputs)[0]  # [batch_size, sequence_length, 768]
 
-        dna_embeddings = getattr(dna_hidden_states, self.dna_embeddings_pool)(dim=1) # expected shape [batch_size, 768]
+        dna_embeddings = getattr(dna_hidden_states, self.dna_embeddings_pool)(dim=1)  # expected shape [batch_size, 768]
 
         graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
 
