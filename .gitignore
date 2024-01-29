@@ -6,6 +6,8 @@ __pycache__/
 data/
 .DS_Store/
 
+/wandb/
+
 dataset/UP000000805_243232_METJA_v4
 dataset/dataset/processed
 dataset/dataset/raw

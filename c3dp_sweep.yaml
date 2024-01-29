@@ -1,0 +1,19 @@
+program: train_c3dp.py
+method: bayes
+metric:
+  goal: minimize
+  name: val_loss
+parameters:
+  learning_rate:
+    min: 0.0001
+    max: 0.1
+  batch_size:
+    values: [8]
+  n_epochs:
+    values: [3]
+  weight_decay:
+    distribution: uniform
+    min: 1e-8
+    max: 1e-5
+  optimizer:
+    values: ["Adam", "SGD"]

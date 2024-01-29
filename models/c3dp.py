@@ -44,11 +44,11 @@ class C3DPNet(nn.Module):
                                           else kwargs["dim_target"], out_features_projection)
         self.device = torch_device('cpu', 0)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: list[str], batch: torch.Tensor,
                 return_dict: bool = False):
 
         dna_inputs_list = []
-        for primary_sequence in batch.sequence_A:
+        for primary_sequence in sequences_A:
             dna_inputs_list.append(self.dna_tokenizer(primary_sequence, return_tensors="pt", padding='max_length',
                                                       max_length=DNA_MAX_SEQUENCE_LENGTH, truncation=True)["input_ids"])
         dna_inputs = torch.cat(dna_inputs_list).to(self.device)
@@ -59,7 +59,7 @@ class C3DPNet(nn.Module):
         graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
 
         if self.__graph_model_name != "DiffPool":
-            graph_embeddings = self.graph_embeddings_pool(x=graph_embeddings, batch=batch.batch)
+            graph_embeddings = global_mean_pool(x=graph_embeddings, batch=batch)
 
         dna_embeddings = self.dna_projection(dna_embeddings)
         graph_embeddings = self.graph_projection(graph_embeddings)

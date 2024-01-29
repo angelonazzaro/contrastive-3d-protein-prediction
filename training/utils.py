@@ -1,9 +1,13 @@
-import os
-import random
 from typing import Tuple
 
 import numpy as np
 import torch
+import wandb
+from torch.utils.data import random_split
+from torch_geometric.loader import DataLoader
+
+from dataset import ProteinGraphDataset
+from models.c3dp import C3DPNet
 
 
 # All credits go to Bjarten and the other contributors: https://github.com/Bjarten/early-stopping-pytorch.git
@@ -89,5 +93,65 @@ def get_splits(n_instances: int, train_split_percentage: float, val_split_percen
 
     return train_split, val_split, test_split
 
-def train_model(model: torch.nn.Module, train_dataloader, val_dataloader, epochs, optimizer):
-    pass
+
+def train_model(args, config=None):
+    with wandb.init(config=config):
+        print("Loading data...")
+
+        if args["tune_hyperparameters"]:
+            config = wandb.config
+
+        batch_size = args["batch_size"] if not args["tune_hyperparameters"] else config["batch_size"]
+        n_epochs = args["n_epochs"] if not args["tune_hyperparameters"] else config["n_epochs"]
+
+        dataset = ProteinGraphDataset(root=args["data_root_dir"])
+        train_split, val_split, test_split = get_splits(n_instances=len(dataset),
+                                                        train_split_percentage=args["training_split_percentage"],
+                                                        val_split_percentage=args["val_split_percentage"])
+        train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
+        train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=args["shuffle"])
+        val_dataloader = DataLoader(val_ds, batch_size=batch_size, shuffle=args["shuffle"])
+
+        if args["in_channels"] is None:
+            args["in_channels"] = dataset.num_node_features
+
+        model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
+                        dna_embeddings_pool=args["dna_embeddings_pool"],
+                        graph_embeddings_pool=args["graph_embeddings_pool"],
+                        out_features_projection=args["out_features_projection"],
+                        in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
+                        num_layers=args["num_layers"])
+
+        for epoch in range(n_epochs):
+            avg_train_loss = train_epoch(model=model, train_dataloader=train_dataloader,
+                                         config=args if not args["tune_hyperparameters"] else config)
+            wandb.log({"loss": avg_train_loss, "epoch": epoch})
+
+            # validation step
+            model.eval()
+            val_loss = 0.0
+
+            for data in val_dataloader:
+                loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
+                val_loss += loss.item()
+
+            wandb.log({"val_loss": val_loss / len(val_dataloader)})
+
+
+def train_epoch(model: C3DPNet, train_dataloader: DataLoader, config) -> float:
+    optimizer = getattr(torch.optim, config["optimizer"])(model.parameters(), lr=config["learning_rate"],
+                                                          weight_decay=config["weight_decay"])
+    cum_loss = 0.0
+    for data in train_dataloader:
+        model.train()
+        optimizer.zero_grad()  # Clear gradients
+
+        loss = model(data.x, data.edge_index, data.sequence_A, data.batch)  # forward pass + compute loss
+        cum_loss += loss.item()
+
+        loss.backward()  # Derive gradients
+        optimizer.step()  # Update parameters based on gradients
+
+        wandb.log({"batch_loss": loss.item()})
+
+    return cum_loss / len(train_dataloader)
