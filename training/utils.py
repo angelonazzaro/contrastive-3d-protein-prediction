@@ -1,13 +1,17 @@
+import os
+import time
 from typing import Tuple
 
 import numpy as np
 import torch
 import wandb
 from torch.utils.data import random_split
+from torch_geometric import seed_everything
 from torch_geometric.loader import DataLoader
 
 from dataset import ProteinGraphDataset
 from models.c3dp import C3DPNet
+from training.logger import Logger
 
 
 # All credits go to Bjarten and the other contributors: https://github.com/Bjarten/early-stopping-pytorch.git
@@ -58,9 +62,14 @@ class EarlyStopping:
     def save_checkpoint(self, val_loss, model):
         """Saves model when validation loss decrease."""
 
+        p = os.path.splitext(self.path)
+        self.path = p[0] + f"-val_loss={val_loss:.6f}" + p[1]
+
         if self.verbose:
             self.trace_func(
-                f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+                f'Validation loss decreased ({val_loss:.6f} --> {val_loss:.6f}).  '
+                f'Saving model to {self.path}')
+
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss
 
@@ -96,15 +105,36 @@ def get_splits(n_instances: int, train_split_percentage: float, val_split_percen
 
 def train_model(args, config=None):
     with wandb.init(config=config):
-        print("Loading data...")
+
+        experiment_dir = os.path.join(args["experiment_dir"], wandb.run.id)
+        if not os.path.exists(experiment_dir):
+            os.makedirs(experiment_dir)
 
         if args["tune_hyperparameters"]:
             config = wandb.config
 
+        logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
+
+        seed_everything(seed=args["seed"])
+
+        logger.log(f"Seed everything to: {args['seed']}\n"
+                   f"Launching training for experiment {wandb.run.id}: \n"
+                   f"Experiment dir: {experiment_dir} \n"
+                   f"Config: {config}\n")
+
         batch_size = args["batch_size"] if not args["tune_hyperparameters"] else config["batch_size"]
         n_epochs = args["n_epochs"] if not args["tune_hyperparameters"] else config["n_epochs"]
 
+        logger.log(f"Loading dataset....\n")
+
         dataset = ProteinGraphDataset(root=args["data_root_dir"])
+        logger.log(f"Loaded dataset: {dataset}\n"
+                   f"==================\n"
+                   f"Batch size: {batch_size}\n"
+                   f"Dataset size: {len(dataset)} \n"
+                   f"Number of graphs size: {len(dataset)}\n"
+                   f"Number of edges features: {dataset.num_edge_features}\n"
+                   f"Number of node features: {dataset.num_node_features}\n")
         train_split, val_split, test_split = get_splits(n_instances=len(dataset),
                                                         train_split_percentage=args["training_split_percentage"],
                                                         val_split_percentage=args["val_split_percentage"])
@@ -115,17 +145,42 @@ def train_model(args, config=None):
         if args["in_channels"] is None:
             args["in_channels"] = dataset.num_node_features
 
+        logger.log(f"Loading model\n"
+                   f"==================\n"
+                   f"Graph Model: {args['graph_model']}\n"
+                   f"In channels: {args['in_channels']} \n"
+                   f"Hidden channels: {args['hidden_channels']}\n"
+                   f"Num layers: {args['num_layers']}\n")
+
         model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
                         dna_embeddings_pool=args["dna_embeddings_pool"],
                         graph_embeddings_pool=args["graph_embeddings_pool"],
                         out_features_projection=args["out_features_projection"],
+                        use_sigmoid=args["use_sigmoid"],
                         in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
                         num_layers=args["num_layers"])
 
+        logger.log(f"Loaded model: {model}\n")
+
+        if args["checkpoint_path"] is not None:
+            logger.log(f"Loading checkpoint: {args['checkpoint_path']}\n")
+            model.load_state_dict(torch.load(args["checkpoint_path"]))
+
+        checkpoint_saving_path = os.path.join(experiment_dir, f"{args['graph_model'].lower()}.pt")
+
+        early_stopping_monitor = EarlyStopping(patience=args["early_stopping_patience"], verbose=True,
+                                               delta=args["early_stopping_delta"], path=checkpoint_saving_path,
+                                               trace_func=logger.log)
+
+        learning_rate = args["learning_rate"] if not args["tune_hyperparameters"] else config["learning_rate"]
+        weight_decay = args["weight_decay"] if not args["tune_hyperparameters"] else config["weight_decay"]
+        optimizer = getattr(torch.optim,
+                            args["optimizer"] if not args["tune_hyperparameters"]
+                            else config["optimizer"])(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
         for epoch in range(n_epochs):
-            avg_train_loss = train_epoch(model=model, train_dataloader=train_dataloader,
-                                         config=args if not args["tune_hyperparameters"] else config)
-            wandb.log({"loss": avg_train_loss, "epoch": epoch})
+            avg_train_loss = train_epoch(model=model, train_dataloader=train_dataloader, optimizer=optimizer,
+                                         logger=logger, start_time=time.time(), epoch=epoch, n_epochs=n_epochs)
 
             # validation step
             model.eval()
@@ -135,14 +190,28 @@ def train_model(args, config=None):
                 loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
                 val_loss += loss.item()
 
-            wandb.log({"val_loss": val_loss / len(val_dataloader)})
+            val_loss = val_loss / len(val_dataloader)
+
+            logger.log(f"Epoch {epoch} out of {n_epochs} - train_loss: {avg_train_loss:.6f} - val_loss: {val_loss:.6f}")
+            wandb.log({"loss": avg_train_loss, "val_loss": val_loss, "epoch": epoch})
+
+            early_stopping_monitor(model=model, val_loss=val_loss)
+
+            if early_stopping_monitor.early_stop:
+                logger.log(f"Stopping training at Epoch: {epoch}. Val_loss did not improve in "
+                           f"{early_stopping_monitor.patience} epochs. "
+                           f"Best score: {early_stopping_monitor.best_score:.6f}")
+                break
+
+            torch.cuda.empty_cache()
 
 
-def train_epoch(model: C3DPNet, train_dataloader: DataLoader, config) -> float:
-    optimizer = getattr(torch.optim, config["optimizer"])(model.parameters(), lr=config["learning_rate"],
-                                                          weight_decay=config["weight_decay"])
+def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.optim.Optimizer,
+                logger: Logger, start_time: float, epoch: int, n_epochs: int) -> float:
     cum_loss = 0.0
-    for data in train_dataloader:
+    num_batches = len(train_dataloader)
+    for batch_idx, data in enumerate(train_dataloader):
+        logger.log(f"Epoch {epoch} out of {n_epochs} --- Batch {batch_idx + 1} out of {num_batches}")
         model.train()
         optimizer.zero_grad()  # Clear gradients
 
@@ -152,6 +221,13 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, config) -> float:
         loss.backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
 
+        # # Calculate ETA
+        # progress = batch_idx + 1 / num_batches
+        # elapsed_time = time.time() - start_time
+        # eta_seconds = (elapsed_time / progress) * (1 - progress)
+        # eta_formatted = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+        # logger.log(f"Batch [{batch_idx + 1}/{num_batches}], ETA: {eta_formatted}\r")
+
         wandb.log({"batch_loss": loss.item()})
 
-    return cum_loss / len(train_dataloader)
+    return cum_loss / num_batches

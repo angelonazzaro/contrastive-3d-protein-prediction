@@ -6,8 +6,6 @@ from functools import partial
 import yaml
 
 import wandb
-from torch_geometric import seed_everything
-
 from training.constants import *
 from training.utils import train_model
 
@@ -19,9 +17,6 @@ def main(args):
 
     if not args.tune_hyperparameters and args.weight_decay is None:
         raise Exception("You must set the weight decay (`weight_decay`) when training")
-
-    print("Seed Everything to " + str(args.seed))
-    seed_everything(args.seed)
 
     # run wandb sweep to tune hyperparameters
     if args.tune_hyperparameters:
@@ -41,11 +36,14 @@ if __name__ == "__main__":
 
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--data_root_dir", type=str, default=osp.join(os.getcwd(), "data"))
+    parser.add_argument("--experiment_dir", type=str, default=osp.join(os.getcwd(), "experiments"))
+    parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--graph_model", type=str, default="GraphSAGE")
     parser.add_argument("--temperature", type=float, default=0.5)
     parser.add_argument("--dna_embeddings_pool", type=str, default="mean")
     parser.add_argument("--graph_embeddings_pool", type=str, default="mean")
     parser.add_argument("--out_features_projection", type=int, default=768)
+    parser.add_argument("--use_sigmoid", action="store_true", default=False)
     parser.add_argument("--in_channels", type=int, default=None)
     parser.add_argument("--hidden_channels", type=int, default=10)
     parser.add_argument("--num_layers", type=int, default=3)
