@@ -14,6 +14,7 @@ class C3DPNet(nn.Module):
                  dna_embeddings_pool: str = "mean",
                  graph_embeddings_pool: str = "mean",
                  out_features_projection: int = 768,
+                 use_sigmoid: bool = False,
                  **kwargs):
         super().__init__()
 
@@ -37,7 +38,7 @@ class C3DPNet(nn.Module):
         self.__graph_model_name = graph_model
         self.dna_embeddings_pool = dna_embeddings_pool
         self.graph_embeddings_pool = GRAPH_EMBEDDING_POOLS[graph_embeddings_pool]
-        self.loss = ContrastiveLoss(temperature=temperature)
+        self.loss = ContrastiveLoss(temperature=temperature, use_sigmoid=use_sigmoid)
         self.dna_projection = nn.Linear(DNA_SEQUENCE_FEATURES, out_features_projection)
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
                                           else kwargs["dim_target"], out_features_projection)
