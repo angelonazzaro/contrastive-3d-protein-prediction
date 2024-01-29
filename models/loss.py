@@ -32,7 +32,7 @@ class ContrastiveLoss(torch.nn.Module):
         z2 = F.normalize(z2, dim=1, p=2)
 
         # Concatenate representations to form positive and negative batches
-        representations = torch.cat([z1, z2], dim=0)
+        representations = torch.cat([z1, z2], dim=1)
 
         # Compute the similarity matrix (dot product)
         similarity_matrix = torch.matmul(representations, representations.T) / self.temperature
@@ -51,7 +51,7 @@ class ContrastiveLoss(torch.nn.Module):
 
         logits = torch.cat([positive_samples, negative_samples], dim=1)
         labels = torch.zeros(logits.size(0)).to(z1.device).long()
-
+        
         if self.use_sigmoid:
             # Use sigmoid function
             sigmoid_output = torch.sigmoid(logits)
