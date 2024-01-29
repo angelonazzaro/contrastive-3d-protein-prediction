@@ -1,15 +1,10 @@
-from typing import Callable
-
 import torch
-
 from torch import nn, device as torch_device
-from torch_geometric.nn import global_mean_pool
-
-from models.loss import ContrastiveLoss
 from transformers import AutoTokenizer, AutoModel, BertConfig
 
 from models.constants import GRAPH_MODELS, DNA_MODEL, DNA_TOKENIZER, DNA_MAX_SEQUENCE_LENGTH, DNA_SEQUENCE_FEATURES, \
-    SUPPORTED_DNA_POOLING
+    SUPPORTED_DNA_POOLING, GRAPH_EMBEDDING_POOLS
+from models.loss import ContrastiveLoss
 
 
 class C3DPNet(nn.Module):
@@ -17,13 +12,17 @@ class C3DPNet(nn.Module):
                  graph_model: str = "GraphSAGE",
                  temperature: float = 0.5,
                  dna_embeddings_pool: str = "mean",
-                 graph_embeddings_pool: Callable = global_mean_pool,
+                 graph_embeddings_pool: str = "mean",
                  out_features_projection: int = 768,
                  **kwargs):
         super().__init__()
 
         if dna_embeddings_pool not in SUPPORTED_DNA_POOLING:
             raise Exception(f"Mode not supported. Supported dna embeddings pooling: {SUPPORTED_DNA_POOLING}")
+
+        if graph_embeddings_pool not in GRAPH_EMBEDDING_POOLS.keys():
+            raise Exception(f"Mode not supported. Supported graph embeddings pooling: "
+                            f"{list(GRAPH_EMBEDDING_POOLS.keys())}")
 
         if graph_embeddings_pool is None:
             raise Exception("graph_embeddings_pool cannot be None")
@@ -37,7 +36,7 @@ class C3DPNet(nn.Module):
         self.graph_model = GRAPH_MODELS[graph_model](**kwargs)
         self.__graph_model_name = graph_model
         self.dna_embeddings_pool = dna_embeddings_pool
-        self.graph_embeddings_pool = graph_embeddings_pool
+        self.graph_embeddings_pool = GRAPH_EMBEDDING_POOLS[graph_embeddings_pool]
         self.loss = ContrastiveLoss(temperature=temperature)
         self.dna_projection = nn.Linear(DNA_SEQUENCE_FEATURES, out_features_projection)
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
@@ -59,7 +58,7 @@ class C3DPNet(nn.Module):
         graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
 
         if self.__graph_model_name != "DiffPool":
-            graph_embeddings = global_mean_pool(x=graph_embeddings, batch=batch)
+            graph_embeddings = self.graph_embeddings_pool(x=graph_embeddings, batch=batch)
 
         dna_embeddings = self.dna_projection(dna_embeddings)
         graph_embeddings = self.graph_projection(graph_embeddings)
