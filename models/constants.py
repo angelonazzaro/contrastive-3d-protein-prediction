@@ -1,4 +1,4 @@
-from torch_geometric.nn import GraphSAGE, GAT, GIN, GCN, GraphUNet
+from torch_geometric.nn import GraphSAGE, GAT, GIN, GCN, GraphUNet, global_mean_pool, global_max_pool
 from models.diffpool import DiffPool
 
 GRAPH_MODELS = {
@@ -8,6 +8,10 @@ GRAPH_MODELS = {
     "GCN": GCN,
     "GraphUNet": GraphUNet,
     "DiffPool": DiffPool
+}
+GRAPH_EMBEDDING_POOLS = {
+    "mean": global_mean_pool,
+    "max": global_max_pool,
 }
 DNA_MODEL = "zhihan1996/DNABERT-2-117M"
 DNA_TOKENIZER = "zhihan1996/DNABERT-2-117M"
