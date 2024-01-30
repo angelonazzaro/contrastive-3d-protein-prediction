@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from typing import Tuple
 
@@ -13,7 +14,6 @@ from dataset import ProteinGraphDataset
 from models.c3dp import C3DPNet
 from training.logger import Logger
 from tqdm import tqdm
-
 
 
 # All credits go to Bjarten and the other contributors: https://github.com/Bjarten/early-stopping-pytorch.git
@@ -53,7 +53,7 @@ class EarlyStopping:
             self.save_checkpoint(val_loss, model)
         elif score < self.best_score + self.delta:
             self.counter += 1
-            self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            self.trace_func(f'Val loss did not improve. EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
@@ -106,7 +106,8 @@ def get_splits(n_instances: int, train_split_percentage: float, val_split_percen
 
 
 def train_model(args, config=None):
-    with wandb.init(config=config):
+    with wandb.init(name=args["run_name"] if args["run_name"] is not None else args['graph_model'].lower(),
+                    config=config):
 
         experiment_dir = os.path.join(args["experiment_dir"], wandb.run.id)
         if not os.path.exists(experiment_dir):
@@ -180,17 +181,26 @@ def train_model(args, config=None):
                             args["optimizer"] if not args["tune_hyperparameters"]
                             else config["optimizer"])(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
+        logger.log("Starting training...\n")
+
         for epoch in range(n_epochs):
             avg_train_loss = train_epoch(model=model, train_dataloader=train_dataloader, optimizer=optimizer,
-                                         logger=logger, start_time=time.time(), epoch=epoch, n_epochs=n_epochs)
+                                         epoch=epoch, n_epochs=n_epochs)
 
             # validation step
             model.eval()
             val_loss = 0.0
 
-            for data in val_dataloader:
+            progress_bar = tqdm(enumerate(val_dataloader), total=len(val_dataloader), file=sys.stdout,
+                                desc=f'Validation')
+
+            for batch_idx, data in progress_bar:
                 loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
                 val_loss += loss.item()
+
+                progress_bar.set_postfix({"val_loss": loss.item()})
+
+            progress_bar.close()
 
             val_loss = val_loss / len(val_dataloader)
 
@@ -207,13 +217,16 @@ def train_model(args, config=None):
 
             torch.cuda.empty_cache()
 
+    wandb.finish()
 
-def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.optim.Optimizer,
-                logger: Logger, start_time: float, epoch: int, n_epochs: int) -> float:
+
+def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.optim.Optimizer, epoch: int,
+                n_epochs: int) -> float:
     cum_loss = 0.0
     num_batches = len(train_dataloader)
 
-    progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch}/{n_epochs}')
+    progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch}/{n_epochs}',
+                        file=sys.stdout)
 
     for batch_idx, data in progress_bar:
         model.train()
@@ -225,18 +238,10 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
         loss.backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
 
-        progress_bar.set_postfix({'Loss': loss.item()})
-
-        # Calculate ETA for the next batch
-        elapsed_time = time.time() - start_time
-        eta_seconds = (elapsed_time / (batch_idx + 1) * (num_batches - batch_idx - 1))
-        eta_formatted = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
-        progress_bar.set_postfix({'ETA': eta_formatted})
-
-        wandb.log({"batch_loss": loss.item()})
+        progress_bar.set_postfix({'train_loss': loss.item()})
+        wandb.log({"train_loss": loss.item()})
 
     progress_bar.close()
 
     # Returning the average batch loss
     return cum_loss / num_batches
-

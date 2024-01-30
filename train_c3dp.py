@@ -28,8 +28,6 @@ def main(args):
     else:
         train_model(args=vars(args))
 
-    wandb.finish()
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -54,6 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_epochs", type=int, default=N_EPOCHS)
     parser.add_argument("--metrics", nargs='*', default=['loss', 'val_loss'])
     parser.add_argument("--project_name", type=str, default="c3dp")
+    parser.add_argument("--run_name", type=str, default=None)
     parser.add_argument("--sweep_config", type=str, default=osp.join(os.getcwd(), "c3dp_sweep.yaml"))
     parser.add_argument("--sweep_count", type=int, default=10)
     parser.add_argument("--early_stopping_patience", type=int, default=7)
