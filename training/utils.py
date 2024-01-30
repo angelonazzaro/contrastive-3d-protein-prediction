@@ -12,6 +12,8 @@ from torch_geometric.loader import DataLoader
 from dataset import ProteinGraphDataset
 from models.c3dp import C3DPNet
 from training.logger import Logger
+from tqdm import tqdm
+
 
 
 # All credits go to Bjarten and the other contributors: https://github.com/Bjarten/early-stopping-pytorch.git
@@ -210,8 +212,10 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
                 logger: Logger, start_time: float, epoch: int, n_epochs: int) -> float:
     cum_loss = 0.0
     num_batches = len(train_dataloader)
-    for batch_idx, data in enumerate(train_dataloader):
-        logger.log(f"Epoch {epoch} out of {n_epochs} --- Batch {batch_idx + 1} out of {num_batches}")
+
+    progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch}/{n_epochs}')
+
+    for batch_idx, data in progress_bar:
         model.train()
         optimizer.zero_grad()  # Clear gradients
 
@@ -221,13 +225,18 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
         loss.backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
 
-        # # Calculate ETA
-        # progress = batch_idx + 1 / num_batches
-        # elapsed_time = time.time() - start_time
-        # eta_seconds = (elapsed_time / progress) * (1 - progress)
-        # eta_formatted = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
-        # logger.log(f"Batch [{batch_idx + 1}/{num_batches}], ETA: {eta_formatted}\r")
+        progress_bar.set_postfix({'Loss': loss.item()})
+
+        # Calculate ETA for the next batch
+        elapsed_time = time.time() - start_time
+        eta_seconds = (elapsed_time / (batch_idx + 1) * (num_batches - batch_idx - 1))
+        eta_formatted = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+        progress_bar.set_postfix({'ETA': eta_formatted})
 
         wandb.log({"batch_loss": loss.item()})
 
+    progress_bar.close()
+
+    # Returning the average batch loss
     return cum_loss / num_batches
+
