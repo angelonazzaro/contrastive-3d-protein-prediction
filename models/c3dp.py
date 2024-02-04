@@ -1,3 +1,5 @@
+from typing import Optional, Union
+
 import torch
 from torch import nn, device as torch_device
 from transformers import AutoTokenizer, AutoModel, BertConfig
@@ -44,10 +46,14 @@ class C3DPNet(nn.Module):
                                           else kwargs["dim_target"], out_features_projection)
         self.device = torch_device('cpu', 0)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: list[str], batch: torch.Tensor,
-                return_dict: bool = False):
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: Union[str, list[str]],
+                batch: Optional[torch.Tensor] = None, return_dict: bool = False):
 
         dna_inputs_list = []
+
+        if isinstance(sequences_A, str):
+            sequences_A = [sequences_A]
+
         for primary_sequence in sequences_A:
             dna_inputs_list.append(self.dna_tokenizer(primary_sequence, return_tensors="pt", padding='max_length',
                                                       max_length=DNA_MAX_SEQUENCE_LENGTH, truncation=True)["input_ids"])
@@ -64,7 +70,14 @@ class C3DPNet(nn.Module):
         dna_embeddings = self.dna_projection(dna_embeddings)
         graph_embeddings = self.graph_projection(graph_embeddings)
 
-        return self.loss(graph_embeddings, dna_embeddings, return_dict=return_dict)
+        graph_dna_loss = self.loss(graph_embeddings, dna_embeddings)
+        dna_graph_loss = self.loss(dna_embeddings, graph_embeddings)
+
+        loss = (graph_dna_loss["loss"] + dna_graph_loss["loss"]) / 2
+
+        if return_dict:
+            return {"loss": loss, "logits": graph_dna_loss["logits"]}
+        return loss
 
     def to(self, device: str):
         m = super().to(device)

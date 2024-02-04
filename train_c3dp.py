@@ -12,7 +12,7 @@ from training.utils import train_model
 
 def main(args):
 
-    if not args.tune_hyperparameters and args.lr is None:
+    if not args.tune_hyperparameters and args.learning_rate is None:
         raise Exception("You must set the learning rate (`learning_rate`) when training")
 
     if not args.tune_hyperparameters and args.weight_decay is None:
@@ -50,7 +50,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE)
     parser.add_argument("--shuffle", action="store_false", default=True)
     parser.add_argument("--n_epochs", type=int, default=N_EPOCHS)
-    parser.add_argument("--metrics", nargs='*', default=['loss', 'val_loss'])
     parser.add_argument("--project_name", type=str, default="c3dp")
     parser.add_argument("--run_name", type=str, default=None)
     parser.add_argument("--sweep_config", type=str, default=osp.join(os.getcwd(), "c3dp_sweep.yaml"))
@@ -60,6 +59,6 @@ if __name__ == "__main__":
     parser.add_argument("--optimizer", type=str, default="AdamW")
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--weight_decay", type=float)
-    parser.add_argument("--tune_hyperparameters", action="store_true", default=True)
+    parser.add_argument("--tune_hyperparameters", action="store_true", default=False)
 
     main(parser.parse_args())

@@ -15,14 +15,13 @@ class ContrastiveLoss(torch.nn.Module):
         self.temperature = temperature
         self.use_sigmoid = use_sigmoid
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor, return_dict: bool = False):
+    def forward(self, z1: torch.Tensor, z2: torch.Tensor):
         """
         Forward pass of the Contrastive Loss.
 
         Args:
             z1 (torch.Tensor): Representations from the first set of samples.
             z2 (torch.Tensor): Representations from the second set of samples.
-            return_dict (bool): If True, return a dictionary with loss, labels, and logits.
 
         Returns:
             torch.Tensor or dict: Contrastive loss value or a dictionary containing loss, labels, and logits.
@@ -46,12 +45,12 @@ class ContrastiveLoss(torch.nn.Module):
         mask = torch.eq(labels, labels.T).float()
 
         # Compute contrastive loss
-        positive_samples = similarity_matrix[~mask.bool()].view(representations.size(0), -1)
-        negative_samples = similarity_matrix[mask.bool()].view(representations.size(0), -1)
+        positive_samples = similarity_matrix[mask.bool()].view(representations.size(0), -1)
+        negative_samples = similarity_matrix[~mask.bool()].view(representations.size(0), -1)
 
         logits = torch.cat([positive_samples, negative_samples], dim=1)
         labels = torch.zeros(logits.size(0)).to(z1.device).long()
-        
+
         if self.use_sigmoid:
             # Use sigmoid function
             sigmoid_output = torch.sigmoid(logits)
@@ -60,7 +59,4 @@ class ContrastiveLoss(torch.nn.Module):
             # Use cross entropy
             loss = F.cross_entropy(logits, labels)
 
-        if return_dict:
-            return {"loss": loss, "labels": labels, "logits": logits}
-        else:
-            return loss
+        return {"loss": loss, "labels": labels, "logits": logits}

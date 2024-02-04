@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 from typing import Tuple
@@ -65,14 +66,14 @@ class EarlyStopping:
         """Saves model when validation loss decrease."""
 
         p = os.path.splitext(self.path)
-        self.path = p[0] + f"-val_loss={val_loss:.6f}" + p[1]
+        path = p[0] + f"-val_loss={val_loss:.6f}" + p[1]
 
         if self.verbose:
             self.trace_func(
-                f'Validation loss decreased ({val_loss:.6f} --> {val_loss:.6f}).  '
-                f'Saving model to {self.path}')
+                f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  '
+                f'Saving model to {path}')
 
-        torch.save(model.state_dict(), self.path)
+        torch.save(model.state_dict(), path)
         self.val_loss_min = val_loss
 
 
@@ -123,7 +124,8 @@ def train_model(args, config=None):
         logger.log(f"Seed everything to: {args['seed']}\n"
                    f"Launching training for experiment {wandb.run.id}: \n"
                    f"Experiment dir: {experiment_dir} \n"
-                   f"Config: {config}\n")
+                   f"Config: {config}\n"
+                   f"Args: {args}\n")
 
         batch_size = args["batch_size"] if not args["tune_hyperparameters"] else config["batch_size"]
         n_epochs = args["n_epochs"] if not args["tune_hyperparameters"] else config["n_epochs"]
@@ -194,18 +196,21 @@ def train_model(args, config=None):
             progress_bar = tqdm(enumerate(val_dataloader), total=len(val_dataloader), file=sys.stdout,
                                 desc=f'Validation')
 
-            for batch_idx, data in progress_bar:
-                loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
-                val_loss += loss.item()
+            with torch.no_grad():
+                for batch_idx, data in progress_bar:
+                    loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
+                    val_loss += loss.item()
 
-                progress_bar.set_postfix({"val_loss": loss.item()})
+                    progress_bar.set_postfix({"val_loss_step": loss.item()})
+                    wandb.log({"val_loss_step": loss.item()})
 
             progress_bar.close()
 
             val_loss = val_loss / len(val_dataloader)
 
-            logger.log(f"Epoch {epoch} out of {n_epochs} - train_loss: {avg_train_loss:.6f} - val_loss: {val_loss:.6f}")
-            wandb.log({"loss": avg_train_loss, "val_loss": val_loss, "epoch": epoch})
+            logger.log(f"Epoch {epoch + 1} out of {n_epochs} - train_loss: {avg_train_loss:.6f} - "
+                       f"val_loss: {val_loss:.6f}")
+            wandb.log({"train_loss": avg_train_loss, "val_loss": val_loss, "epoch": epoch + 1})
 
             early_stopping_monitor(model=model, val_loss=val_loss)
 
@@ -225,7 +230,7 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
     cum_loss = 0.0
     num_batches = len(train_dataloader)
 
-    progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch}/{n_epochs}',
+    progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch + 1}/{n_epochs}',
                         file=sys.stdout)
 
     for batch_idx, data in progress_bar:
@@ -238,8 +243,8 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
         loss.backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
 
-        progress_bar.set_postfix({'train_loss': loss.item()})
-        wandb.log({"train_loss": loss.item()})
+        progress_bar.set_postfix({'train_step_loss': loss.item()})
+        wandb.log({"train_step_loss": loss.item()})
 
     progress_bar.close()
 
