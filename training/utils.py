@@ -198,11 +198,12 @@ def train_model(args, config=None):
 
             with torch.no_grad():
                 for batch_idx, data in progress_bar:
-                    loss = model(data.x, data.edge_index, data.sequence_A, data.batch)
-                    val_loss += loss.item()
+                    output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
+                    val_loss += output["loss"].item()
 
-                    progress_bar.set_postfix({"val_loss_step": loss.item()})
-                    wandb.log({"val_loss_step": loss.item()})
+                    acc = compute_accuracy(output["logits"], len(data))
+                    progress_bar.set_postfix({"val_loss_step": output["loss"].item(), "val_acc": acc.item()})
+                    wandb.log({"val_loss_step": output["loss"].item(), "val_acc": acc.item()})
 
             progress_bar.close()
 
@@ -237,16 +238,26 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
         model.train()
         optimizer.zero_grad()  # Clear gradients
 
-        loss = model(data.x, data.edge_index, data.sequence_A, data.batch)  # forward pass + compute loss
-        cum_loss += loss.item()
+        output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)  # forward pass + compute loss
+        cum_loss += output["loss"].item()
 
-        loss.backward()  # Derive gradients
+        output["loss"].backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
+        acc = compute_accuracy(output["logits"], len(data))
 
-        progress_bar.set_postfix({'train_step_loss': loss.item()})
-        wandb.log({"train_step_loss": loss.item()})
+        progress_bar.set_postfix({'train_step_loss': output["loss"].item(), 'acc': acc.item()})
+        wandb.log({"train_step_loss": output["loss"].item(), 'acc': acc.item()})
 
     progress_bar.close()
 
     # Returning the average batch loss
     return cum_loss / num_batches
+
+
+def compute_accuracy(graph_logits: torch.Tensor, batch_size: int):
+    ground_truth = torch.arange(len(graph_logits)).to(graph_logits.device)
+
+    acc_g = (torch.argmax(graph_logits, 1) == ground_truth).sum()
+    acc_d = (torch.argmax(graph_logits, 0) == ground_truth).sum()
+
+    return (acc_g + acc_d) / 2 / batch_size
