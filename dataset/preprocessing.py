@@ -26,20 +26,16 @@ class NodeFeatureFormatter(BaseTransform):
         self.feature_columns = feature_columns if feature_columns is not None else []
 
     def calculate_chemical_information(self, graph: Data) -> Data:
-        # Aggiungi distanza fisica tra gli amminoacidi come attributo del grafico
         atom_coords = graph.coords
         distance_matrix = torch.norm(atom_coords[:, None, :] - atom_coords[None, :, :], dim=-1)
         graph.edge_attr = distance_matrix[graph.edge_index[0], graph.edge_index[1]].view(-1, 1)
 
-        # Aggiungi l'angolo di torsione come attributo del grafico (sostituisci con la tua logica)
         torsion_angles = self.calculate_torsion_angles(graph)
         graph.edge_attr = torch.cat([graph.edge_attr, torsion_angles.view(-1, 1)], dim=-1)
 
-        # Aggiungi informazioni sui legami covalenti (sostituisci con la tua logica)
         covalent_bonds = self.identify_covalent_bonds(graph)
         graph.edge_attr = torch.cat([graph.edge_attr, covalent_bonds.view(-1, 1)], dim=-1)
 
-        # Aggiungi pattern di ripetizione (sostituisci con la tua logica)
         repeat_patterns = self.identify_repeat_patterns(graph)
         graph.edge_attr = torch.cat([graph.edge_attr, repeat_patterns.view(-1, 1)], dim=-1)
 
@@ -78,7 +74,6 @@ class NodeFeatureFormatter(BaseTransform):
         return covalent_bonds
 
     def identify_repeat_patterns(self, graph: Data) -> torch.Tensor:
-        # Sostituisci con la tua logica per identificare i pattern di ripetizione
         repeat_patterns = torch.zeros(graph.edge_attr.size(0), dtype=torch.float32)
         return repeat_patterns
 
@@ -105,7 +100,6 @@ class NodeFeatureFormatter(BaseTransform):
         if "graph_y" in graph:
             graph["y"] = graph["graph_y"]
 
-        # Calcola le informazioni chimiche
         graph = self.calculate_chemical_information(graph)
 
         return graph
