@@ -37,7 +37,6 @@ class C3DPNet(nn.Module):
         self.dna_model = AutoModel.from_config(config)
         self.dna_tokenizer = AutoTokenizer.from_pretrained(DNA_TOKENIZER)
         self.graph_model = GRAPH_MODELS[graph_model](**kwargs)
-        self.__graph_model_name = graph_model
         self.dna_embeddings_pool = dna_embeddings_pool
         self.graph_embeddings_pool = GRAPH_EMBEDDING_POOLS[graph_embeddings_pool]
         self.loss = ContrastiveLoss(temperature=temperature, use_sigmoid=use_sigmoid)
@@ -45,6 +44,9 @@ class C3DPNet(nn.Module):
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
                                           else kwargs["dim_target"], out_features_projection)
         self.device = torch_device('cpu', 0)
+        self.__graph_model_name = graph_model
+        self.__out_features_projection = self.__graph_model_name = graph_model
+        self.__graph_embeddings_pool = graph_embeddings_pool
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: Union[str, list[str]],
                 batch: Optional[torch.Tensor] = None, return_dict: bool = False):
@@ -80,3 +82,16 @@ class C3DPNet(nn.Module):
         m = super().to(device)
         self.device = next(m.parameters()).device
         return m
+
+    def constructor_serializable_parameters(self) -> dict:      
+        return {
+            "graph_model": self.__graph_model_name, 
+            "dna_embeddings_pool": self.dna_embeddings_pool,
+            "graph_embeddings_pool": self.__graph_embeddings_pool, 
+            "temperature": self.loss.temperature, 
+            "use_sigmoid": self.loss.use_sigmoid,
+            "out_features_projection": self.__out_features_projection,
+            "in_channels": self.graph_model.in_channels,  
+            "hidden_channels": self.graph_model.hidden_channels, 
+            "num_layers": self.graph_model.num_layers,
+        }
