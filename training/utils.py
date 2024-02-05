@@ -135,6 +135,7 @@ def train_model(args, config=None):
             args["optimizer"] = config["optimizer"]
             args["lr_scheduler"] = config["lr_scheduler"]
             args["n_epochs"] = config["n_epochs"]
+            args["use_sigmoid"] = config["use_sigmoid"]
 
         logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
 
@@ -194,7 +195,7 @@ def train_model(args, config=None):
             logger.log(f"Loading model state_dict from checkpoint: {args['checkpoint_path']}\n")
             model.load_state_dict(torch.load(args["checkpoint_path"]))
         else:
-            model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
+            model = C3DPNet(graph_model=args["graph_model"],
                             dna_embeddings_pool=args["dna_embeddings_pool"],
                             graph_embeddings_pool=args["graph_embeddings_pool"],
                             out_features_projection=args["out_features_projection"],
@@ -204,11 +205,12 @@ def train_model(args, config=None):
 
         logger.log(f"Loaded model: {model}\n")
 
+        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
+
         if args["checkpoint_path"] is not None:
             logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
             optimizer.load_state_dict(optimizer_state_dict)
 
-        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
         lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
         
         logger.log("Starting training...\n")

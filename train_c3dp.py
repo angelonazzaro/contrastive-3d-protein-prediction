@@ -38,7 +38,6 @@ if __name__ == "__main__":
     parser.add_argument("--experiment_dir", type=str, default=osp.join(os.getcwd(), "experiments"))
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--graph_model", type=str, default="GraphSAGE")
-    parser.add_argument("--temperature", type=float, default=0.5)
     parser.add_argument("--dna_embeddings_pool", type=str, default="mean")
     parser.add_argument("--graph_embeddings_pool", type=str, default="mean")
     parser.add_argument("--out_features_projection", type=int, default=768)
