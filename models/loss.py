@@ -15,7 +15,7 @@ class ContrastiveLoss(torch.nn.Module):
         self.temperature = temperature
         self.use_sigmoid = use_sigmoid
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor):
+    def forward(self, graph_embeddings: torch.Tensor, dna_embeddings: torch.Tensor):
         """
         Forward pass of the Contrastive Loss.
 
@@ -27,30 +27,19 @@ class ContrastiveLoss(torch.nn.Module):
             torch.Tensor or dict: Contrastive loss value or a dictionary containing loss, labels, and logits.
         """
         # Normalize representations
-        z1 = F.normalize(z1, dim=1, p=2)
-        z2 = F.normalize(z2, dim=1, p=2)
-
-        # Concatenate representations to form positive and negative batches
-        representations = torch.cat([z1, z2], dim=1)
+        graph_embeddings = F.normalize(graph_embeddings, dim=1, p=2)
+        dna_embeddings = F.normalize(dna_embeddings, dim=1, p=2)
 
         # Compute the similarity matrix (dot product)
-        similarity_matrix = torch.matmul(representations, representations.T) / self.temperature
+        logits_per_graph = torch.matmul(graph_embeddings, dna_embeddings.t()) / self.temperature
+        labels = torch.arange(len(logits_per_graph), device=logits_per_graph.device)
 
-        # Build target labels
-        labels = torch.arange(0, representations.size(0)).to(z1.device)
-        labels = labels.unsqueeze(0)
-        labels = labels.repeat(labels.size(1), 1)
+        graph_loss = self.__loss(logits_per_graph, labels)
+        dna_loss = self.__loss(logits_per_graph.t(), labels)
 
-        # Mask diagonals in the label matrix
-        mask = torch.eq(labels, labels.T).float()
+        return {"loss": (graph_loss + dna_loss) / 2.0, "labels": labels, "logits": logits_per_graph}
 
-        # Compute contrastive loss
-        positive_samples = similarity_matrix[mask.bool()].view(representations.size(0), -1)
-        negative_samples = similarity_matrix[~mask.bool()].view(representations.size(0), -1)
-
-        logits = torch.cat([positive_samples, negative_samples], dim=1)
-        labels = torch.zeros(logits.size(0)).to(z1.device).long()
-
+    def __loss(self, logits, labels): 
         if self.use_sigmoid:
             # Use sigmoid function
             sigmoid_output = torch.sigmoid(logits)
@@ -58,5 +47,4 @@ class ContrastiveLoss(torch.nn.Module):
         else:
             # Use cross entropy
             loss = F.cross_entropy(logits, labels)
-
-        return {"loss": loss, "labels": labels, "logits": logits}
+        return loss

@@ -70,14 +70,11 @@ class C3DPNet(nn.Module):
         dna_embeddings = self.dna_projection(dna_embeddings)
         graph_embeddings = self.graph_projection(graph_embeddings)
 
-        graph_dna_loss = self.loss(graph_embeddings, dna_embeddings)
-        dna_graph_loss = self.loss(dna_embeddings, graph_embeddings)
-
-        loss = (graph_dna_loss["loss"] + dna_graph_loss["loss"]) / 2
+        output = self.loss(graph_embeddings, dna_embeddings)
 
         if return_dict:
-            return {"loss": loss, "logits": graph_dna_loss["logits"]}
-        return loss
+            return {"loss": output["loss"], "logits": output["logits"]}
+        return output["loss"]
 
     def to(self, device: str):
         m = super().to(device)
