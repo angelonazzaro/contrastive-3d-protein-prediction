@@ -116,6 +116,13 @@ def train_model(args, config=None):
 
         if args["tune_hyperparameters"]:
             config = wandb.config
+            args["hidden_channels"] = config["hidden_channels"]
+            args["num_layers"] = config["num_layers"]
+            args["out_features_projection"] = config["out_features_projection"]
+            args["batch_size"] = config["batch_size"]
+            args["learning_rate"] = config["learning_rate"]
+            args["weight_decay"] = config["weight_decay"]
+            args["optimizer"] = config["optimizer"]
 
         logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
 
@@ -127,15 +134,12 @@ def train_model(args, config=None):
                    f"Config: {config}\n"
                    f"Args: {args}\n")
 
-        batch_size = args["batch_size"] if not args["tune_hyperparameters"] else config["batch_size"]
-        n_epochs = args["n_epochs"] if not args["tune_hyperparameters"] else config["n_epochs"]
-
         logger.log(f"Loading dataset....\n")
 
         dataset = ProteinGraphDataset(root=args["data_root_dir"])
         logger.log(f"Loaded dataset: {dataset}\n"
                    f"==================\n"
-                   f"Batch size: {batch_size}\n"
+                   f"Batch size: {args['batch_size']}\n"
                    f"Dataset size: {len(dataset)} \n"
                    f"Number of graphs size: {len(dataset)}\n"
                    f"Number of edges features: {dataset.num_edge_features}\n"
@@ -144,8 +148,8 @@ def train_model(args, config=None):
                                                         train_split_percentage=args["training_split_percentage"],
                                                         val_split_percentage=args["val_split_percentage"])
         train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
-        train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=args["shuffle"])
-        val_dataloader = DataLoader(val_ds, batch_size=batch_size, shuffle=args["shuffle"])
+        train_dataloader = DataLoader(train_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
+        val_dataloader = DataLoader(val_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
 
         if args["in_channels"] is None:
             args["in_channels"] = dataset.num_node_features
@@ -176,18 +180,13 @@ def train_model(args, config=None):
         early_stopping_monitor = EarlyStopping(patience=args["early_stopping_patience"], verbose=True,
                                                delta=args["early_stopping_delta"], path=checkpoint_saving_path,
                                                trace_func=logger.log)
-
-        learning_rate = args["learning_rate"] if not args["tune_hyperparameters"] else config["learning_rate"]
-        weight_decay = args["weight_decay"] if not args["tune_hyperparameters"] else config["weight_decay"]
-        optimizer = getattr(torch.optim,
-                            args["optimizer"] if not args["tune_hyperparameters"]
-                            else config["optimizer"])(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
 
         logger.log("Starting training...\n")
 
-        for epoch in range(n_epochs):
-            avg_train_loss = train_epoch(model=model, train_dataloader=train_dataloader, optimizer=optimizer,
-                                         epoch=epoch, n_epochs=n_epochs)
+        for epoch in range(args["n_epochs"]):
+            avg_train_loss, train_acc = train_epoch(model=model, train_dataloader=train_dataloader, optimizer=optimizer,
+                                         epoch=epoch, n_epochs=args["n_epochs"])
 
             # validation step
             model.eval()
@@ -196,22 +195,25 @@ def train_model(args, config=None):
             progress_bar = tqdm(enumerate(val_dataloader), total=len(val_dataloader), file=sys.stdout,
                                 desc=f'Validation')
 
+            val_acc = 0
             with torch.no_grad():
                 for batch_idx, data in progress_bar:
                     output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
                     val_loss += output["loss"].item()
 
                     acc = compute_accuracy(output["logits"], len(data))
-                    progress_bar.set_postfix({"val_loss_step": output["loss"].item(), "val_acc": acc.item()})
-                    wandb.log({"val_loss_step": output["loss"].item(), "val_acc": acc.item()})
+                    acc = compute_accuracy(output["logits"], len(data))
+                    val_acc = compute_running_accuracy(acc, val_acc, batch_idx + 1)
+                    progress_bar.set_postfix({"val_loss_step": output["loss"].item(), "val_acc_step": acc.item()})
+                    wandb.log({"val_loss_step": output["loss"].item(), "val_acc_step": acc.item()})
 
             progress_bar.close()
 
             val_loss = val_loss / len(val_dataloader)
 
-            logger.log(f"Epoch {epoch + 1} out of {n_epochs} - train_loss: {avg_train_loss:.6f} - "
-                       f"val_loss: {val_loss:.6f}")
-            wandb.log({"train_loss": avg_train_loss, "val_loss": val_loss, "epoch": epoch + 1})
+            logger.log(f"Epoch {epoch + 1} out of {args['n_epochs']} - train_loss: {avg_train_loss:.6f} - train_acc: {train_acc:.6f}"
+                       f"val_loss: {val_loss:.6f} - val_acc: {acc:.6f}")
+            wandb.log({"train_loss": avg_train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch + 1})
 
             early_stopping_monitor(model=model, val_loss=val_loss)
 
@@ -227,13 +229,14 @@ def train_model(args, config=None):
 
 
 def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.optim.Optimizer, epoch: int,
-                n_epochs: int) -> float:
+                n_epochs: int) -> Tuple[float, float]:
     cum_loss = 0.0
     num_batches = len(train_dataloader)
 
     progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch + 1}/{n_epochs}',
                         file=sys.stdout)
 
+    train_acc = 0
     for batch_idx, data in progress_bar:
         model.train()
         optimizer.zero_grad()  # Clear gradients
@@ -244,14 +247,18 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
         output["loss"].backward()  # Derive gradients
         optimizer.step()  # Update parameters based on gradients
         acc = compute_accuracy(output["logits"], len(data))
-
-        progress_bar.set_postfix({'train_step_loss': output["loss"].item(), 'acc': acc.item()})
-        wandb.log({"train_step_loss": output["loss"].item(), 'acc': acc.item()})
+        train_acc = compute_running_accuracy(acc, train_acc, batch_idx + 1)
+        progress_bar.set_postfix({'train_step_loss': output["loss"].item(), 'acc_step': acc.item()})
+        wandb.log({"train_step_loss": output["loss"].item(), 'acc_step': acc.item()})
 
     progress_bar.close()
 
-    # Returning the average batch loss
-    return cum_loss / num_batches
+    # Returning the average batch loss and accuracy
+    return cum_loss / num_batches, train_acc
+
+
+def compute_running_accuracy(curr_acc: torch.Tensor, prev_acc: torch.Tensor, step: int) -> float:
+    return prev_acc + 1 / (step) * (curr_acc - prev_acc)
 
 
 def compute_accuracy(graph_logits: torch.Tensor, batch_size: int):

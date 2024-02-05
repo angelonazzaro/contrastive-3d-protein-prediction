@@ -1,3 +1,4 @@
+
 import os
 import os.path as osp
 from argparse import ArgumentParser
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("--run_name", type=str, default=None)
     parser.add_argument("--sweep_config", type=str, default=osp.join(os.getcwd(), "c3dp_sweep.yaml"))
     parser.add_argument("--sweep_count", type=int, default=10)
-    parser.add_argument("--early_stopping_patience", type=int, default=7)
+    parser.add_argument("--early_stopping_patience", type=int, default=5)
     parser.add_argument("--early_stopping_delta", type=float, default=0.0)
     parser.add_argument("--optimizer", type=str, default="AdamW")
     parser.add_argument("--learning_rate", type=float)

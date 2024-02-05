@@ -5,12 +5,19 @@ metric:
   name: val_loss
 parameters:
   learning_rate:
-    min: 0.0001
+    distribution: uniform
+    min: 1e-6
     max: 0.1
   batch_size:
-    values: [8]
+    values: [16, 32]
+  hidden_channels: 
+    values: [384, 512, 768]
+  num_layers: 
+    values: [3, 6]
+  out_features_projection:
+    values: [384, 512, 768]
   n_epochs:
-    values: [3]
+    values: [10]
   weight_decay:
     distribution: uniform
     min: 1e-8
