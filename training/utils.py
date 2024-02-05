@@ -43,15 +43,16 @@ class EarlyStopping:
         self.val_loss_min = np.Inf
         self.delta = delta
         self.path = path
+        self.dir_path = os.path.dirname(path)
         self.trace_func = trace_func
 
-    def __call__(self, val_loss, model):
+    def __call__(self, val_loss, model, optimizer):
 
         score = -val_loss
 
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
+            self.save_checkpoint(val_loss, model, optimizer)
         elif score < self.best_score + self.delta:
             self.counter += 1
             self.trace_func(f'Val loss did not improve. EarlyStopping counter: {self.counter} out of {self.patience}')
@@ -59,21 +60,30 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
-            self.save_checkpoint(val_loss, model)
+            self.save_checkpoint(val_loss, model, optimizer)
             self.counter = 0
 
-    def save_checkpoint(self, val_loss, model):
+    def save_checkpoint(self, val_loss, model, optimizer):
         """Saves model when validation loss decrease."""
 
         p = os.path.splitext(self.path)
-        path = p[0] + f"-val_loss={val_loss:.6f}" + p[1]
+        model_path = p[0] + f"-state-dict-val_loss={val_loss:.6f}" + p[1]
+        constructor_parameters_path = p[0] + "-parameters" + p[1]
+        optimizer_path = "optimizer-state-dict" + p[1]
 
         if self.verbose:
             self.trace_func(
                 f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  '
-                f'Saving model to {path}')
+                f'Saving model to {model_path}')
 
-        torch.save(model.state_dict(), path)
+        # remove all previous checkpoints 
+        for filename in os.listdir(self.dir_path):
+            if filename.endswith(p[1]):
+                os.remove(os.path.join(self.dir_path, filename))
+        
+        torch.save(model.state_dict(), model_path)
+        torch.save(model.constructor_serializable_parameters(), constructor_parameters_path)
+        torch.save(optimizer.state_dict(), os.path.join(self.dir_path, optimizer_path))
         self.val_loss_min = val_loss
 
 
@@ -123,6 +133,8 @@ def train_model(args, config=None):
             args["learning_rate"] = config["learning_rate"]
             args["weight_decay"] = config["weight_decay"]
             args["optimizer"] = config["optimizer"]
+            args["lr_scheduler"] = config["lr_scheduler"]
+            args["n_epochs"] = config["n_epochs"]
 
         logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
 
@@ -161,19 +173,8 @@ def train_model(args, config=None):
                    f"Hidden channels: {args['hidden_channels']}\n"
                    f"Num layers: {args['num_layers']}\n")
 
-        model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
-                        dna_embeddings_pool=args["dna_embeddings_pool"],
-                        graph_embeddings_pool=args["graph_embeddings_pool"],
-                        out_features_projection=args["out_features_projection"],
-                        use_sigmoid=args["use_sigmoid"],
-                        in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
-                        num_layers=args["num_layers"])
-
+        
         logger.log(f"Loaded model: {model}\n")
-
-        if args["checkpoint_path"] is not None:
-            logger.log(f"Loading checkpoint: {args['checkpoint_path']}\n")
-            model.load_state_dict(torch.load(args["checkpoint_path"]))
 
         checkpoint_saving_path = os.path.join(experiment_dir, f"{args['graph_model'].lower()}.pt")
 
@@ -181,7 +182,34 @@ def train_model(args, config=None):
                                                delta=args["early_stopping_delta"], path=checkpoint_saving_path,
                                                trace_func=logger.log)
         optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
+       
+        if args["checkpoint_path"] is not None:
+            checkpoint_dir = os.path.dirname(args["checkpoint_path"])
+            # get graph model name
+            graph_model_name = os.path.basename(args["checkpoint_path"]).split("-")[0]
+            ext = os.path.splitext(args["checkpoint_path"])[1]
+            # get constructor parameters 
+            constructor_parameters = torch.load(os.path.join(checkpoint_dir, f"{graph_model_name}-parameters{ext}"))
+            # get optimizer checkpoint
+            optimizer_state_dict = torch.load(os.path.join(checkpoint_dir, f"optimizer-state-dict{ext}"))
 
+            logger.log(f"Loading model from checkpoint with arguments: {constructor_parameters}\n")
+            model = C3DPNet(**constructor_parameters)
+            logger.log(f"Loading model state_dict from checkpoint: {args['checkpoint_path']}\n")
+            model.load_state_dict(torch.load(args["checkpoint_path"]))
+            logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
+            optimizer.load_state_dict(optimizer_state_dict))
+        else:
+            model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
+                            dna_embeddings_pool=args["dna_embeddings_pool"],
+                            graph_embeddings_pool=args["graph_embeddings_pool"],
+                            out_features_projection=args["out_features_projection"],
+                            use_sigmoid=args["use_sigmoid"],
+                            in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
+                            num_layers=args["num_layers"])
+
+        lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
+        
         logger.log("Starting training...\n")
 
         for epoch in range(args["n_epochs"]):
@@ -202,8 +230,8 @@ def train_model(args, config=None):
                     val_loss += output["loss"].item()
 
                     acc = compute_accuracy(output["logits"], len(data))
-                    acc = compute_accuracy(output["logits"], len(data))
                     val_acc = compute_running_accuracy(acc, val_acc, batch_idx + 1)
+
                     progress_bar.set_postfix({"val_loss_step": output["loss"].item(), "val_acc_step": acc.item()})
                     wandb.log({"val_loss_step": output["loss"].item(), "val_acc_step": acc.item()})
 
@@ -211,11 +239,11 @@ def train_model(args, config=None):
 
             val_loss = val_loss / len(val_dataloader)
 
-            logger.log(f"Epoch {epoch + 1} out of {args['n_epochs']} - train_loss: {avg_train_loss:.6f} - train_acc: {train_acc:.6f}"
-                       f"val_loss: {val_loss:.6f} - val_acc: {acc:.6f}")
+            logger.log(f"Epoch {epoch + 1} out of {args['n_epochs']} - train_loss: {avg_train_loss:.6f} - train_acc: {train_acc:.6f} - "
+                       f"val_loss: {val_loss:.6f} - val_acc: {val_acc:.6f}")
             wandb.log({"train_loss": avg_train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch + 1})
 
-            early_stopping_monitor(model=model, val_loss=val_loss)
+            early_stopping_monitor(model=model, val_loss=val_loss, optimizer=optimizer)
 
             if early_stopping_monitor.early_stop:
                 logger.log(f"Stopping training at Epoch: {epoch}. Val_loss did not improve in "
@@ -224,6 +252,7 @@ def train_model(args, config=None):
                 break
 
             torch.cuda.empty_cache()
+            lr_scheduler.step()
 
     wandb.finish()
 
@@ -237,17 +266,18 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
                         file=sys.stdout)
 
     train_acc = 0
+    model.train()
     for batch_idx, data in progress_bar:
-        model.train()
-        optimizer.zero_grad()  # Clear gradients
-
+        optimizer.zero_grad() # # Clear gradients
         output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)  # forward pass + compute loss
         cum_loss += output["loss"].item()
 
         output["loss"].backward()  # Derive gradients
-        optimizer.step()  # Update parameters based on gradients
+        optimizer.step()  # Update parameters based on gradients 
+
         acc = compute_accuracy(output["logits"], len(data))
         train_acc = compute_running_accuracy(acc, train_acc, batch_idx + 1)
+
         progress_bar.set_postfix({'train_step_loss': output["loss"].item(), 'acc_step': acc.item()})
         wandb.log({"train_step_loss": output["loss"].item(), 'acc_step': acc.item()})
 

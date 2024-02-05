@@ -6,10 +6,10 @@ metric:
 parameters:
   learning_rate:
     distribution: uniform
-    min: 1e-6
-    max: 0.1
+    min: 1e-8
+    max: 1e-5
   batch_size:
-    values: [16, 32]
+    values: [8, 12]
   hidden_channels: 
     values: [384, 512, 768]
   num_layers: 
@@ -20,7 +20,9 @@ parameters:
     values: [10]
   weight_decay:
     distribution: uniform
-    min: 1e-8
-    max: 1e-5
+    min: 0.01
+    max: 0.1
   optimizer:
-    values: ["Adam", "SGD"]
+    values: ["Adam", "AdamW", "SGD"]
+  lr_scheduler:
+    values: ["LinearLR"]
