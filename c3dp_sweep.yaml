@@ -26,3 +26,7 @@ parameters:
     values: ["Adam", "AdamW", "SGD"]
   lr_scheduler:
     values: ["LinearLR"]
+  use_sigmoid:
+    values: 
+      - True
+      - False
