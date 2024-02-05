@@ -58,6 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--early_stopping_patience", type=int, default=5)
     parser.add_argument("--early_stopping_delta", type=float, default=0.0)
     parser.add_argument("--optimizer", type=str, default="AdamW")
+    parser.add_argument("--lr_scheduler", type=str, default="LinearLR")
     parser.add_argument("--learning_rate", type=float)
     parser.add_argument("--weight_decay", type=float)
     parser.add_argument("--tune_hyperparameters", action="store_true", default=False)

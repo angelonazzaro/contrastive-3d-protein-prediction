@@ -173,15 +173,11 @@ def train_model(args, config=None):
                    f"Hidden channels: {args['hidden_channels']}\n"
                    f"Num layers: {args['num_layers']}\n")
 
-        
-        logger.log(f"Loaded model: {model}\n")
-
         checkpoint_saving_path = os.path.join(experiment_dir, f"{args['graph_model'].lower()}.pt")
 
         early_stopping_monitor = EarlyStopping(patience=args["early_stopping_patience"], verbose=True,
                                                delta=args["early_stopping_delta"], path=checkpoint_saving_path,
                                                trace_func=logger.log)
-        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
        
         if args["checkpoint_path"] is not None:
             checkpoint_dir = os.path.dirname(args["checkpoint_path"])
@@ -197,8 +193,6 @@ def train_model(args, config=None):
             model = C3DPNet(**constructor_parameters)
             logger.log(f"Loading model state_dict from checkpoint: {args['checkpoint_path']}\n")
             model.load_state_dict(torch.load(args["checkpoint_path"]))
-            logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
-            optimizer.load_state_dict(optimizer_state_dict))
         else:
             model = C3DPNet(graph_model=args["graph_model"], temperature=args["temperature"],
                             dna_embeddings_pool=args["dna_embeddings_pool"],
@@ -208,6 +202,13 @@ def train_model(args, config=None):
                             in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
                             num_layers=args["num_layers"])
 
+        logger.log(f"Loaded model: {model}\n")
+
+        if args["checkpoint_path"] is not None:
+            logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
+            optimizer.load_state_dict(optimizer_state_dict)
+
+        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
         lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
         
         logger.log("Starting training...\n")

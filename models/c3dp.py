@@ -12,7 +12,6 @@ from models.loss import ContrastiveLoss
 class C3DPNet(nn.Module):
     def __init__(self,
                  graph_model: str = "GraphSAGE",
-                 temperature: float = 0.5,
                  dna_embeddings_pool: str = "mean",
                  graph_embeddings_pool: str = "mean",
                  out_features_projection: int = 768,
@@ -39,7 +38,7 @@ class C3DPNet(nn.Module):
         self.graph_model = GRAPH_MODELS[graph_model](**kwargs)
         self.dna_embeddings_pool = dna_embeddings_pool
         self.graph_embeddings_pool = GRAPH_EMBEDDING_POOLS[graph_embeddings_pool]
-        self.loss = ContrastiveLoss(temperature=temperature, use_sigmoid=use_sigmoid)
+        self.loss = ContrastiveLoss(use_sigmoid=use_sigmoid)
         self.dna_projection = nn.Linear(DNA_SEQUENCE_FEATURES, out_features_projection)
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
                                           else kwargs["dim_target"], out_features_projection)
@@ -88,7 +87,6 @@ class C3DPNet(nn.Module):
             "graph_model": self.__graph_model_name, 
             "dna_embeddings_pool": self.dna_embeddings_pool,
             "graph_embeddings_pool": self.__graph_embeddings_pool, 
-            "temperature": self.loss.temperature, 
             "use_sigmoid": self.loss.use_sigmoid,
             "out_features_projection": self.__out_features_projection,
             "in_channels": self.graph_model.in_channels,  
