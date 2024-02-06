@@ -25,6 +25,58 @@ class NodeFeatureFormatter(BaseTransform):
     def __init__(self, feature_columns: Optional[list[str]] = None):
         self.feature_columns = feature_columns if feature_columns is not None else []
 
+    def calculate_chemical_information(self, graph: Data) -> Data:
+        atom_coords = graph.coords
+        distance_matrix = torch.norm(atom_coords[:, None, :] - atom_coords[None, :, :], dim=-1)
+        graph.edge_attr = distance_matrix[graph.edge_index[0], graph.edge_index[1]].view(-1, 1)
+
+        torsion_angles = self.calculate_torsion_angles(graph)
+        graph.edge_attr = torch.cat([graph.edge_attr, torsion_angles.view(-1, 1)], dim=-1)
+
+        covalent_bonds = self.identify_covalent_bonds(graph)
+        graph.edge_attr = torch.cat([graph.edge_attr, covalent_bonds.view(-1, 1)], dim=-1)
+
+        repeat_patterns = self.identify_repeat_patterns(graph)
+        graph.edge_attr = torch.cat([graph.edge_attr, repeat_patterns.view(-1, 1)], dim=-1)
+
+        return graph
+
+    def calculate_torsion_angles(self, graph: Data) -> torch.Tensor:
+        positions = graph.coords
+
+        angles = []
+        for edge in graph.edge_index.t().tolist():
+            atom1, atom2, atom3, atom4 = edge
+
+            v1 = positions[atom1] - positions[atom2]
+            v2 = positions[atom3] - positions[atom2]
+            v3 = positions[atom4] - positions[atom3]
+
+            angle = self.calculate_dihedral_angle(v1, v2, v3)
+            angles.append(angle.item())
+
+        return torch.tensor(angles, dtype=torch.float32)
+
+    def calculate_dihedral_angle(self, v1, v2, v3):
+        cross_product1 = torch.cross(v1, v2)
+        cross_product2 = torch.cross(v2, v3)
+
+        dot_product = torch.dot(cross_product1, cross_product2)
+        norm_product = torch.norm(cross_product1) * torch.norm(cross_product2)
+
+        angle = torch.atan2(norm_product, dot_product)
+        return angle
+
+    def identify_covalent_bonds(self, graph: Data) -> torch.Tensor:
+        bond_types = graph.edge_attr
+
+        covalent_bonds = (bond_types == 1)
+        return covalent_bonds
+
+    def identify_repeat_patterns(self, graph: Data) -> torch.Tensor:
+        repeat_patterns = torch.zeros(graph.edge_attr.size(0), dtype=torch.float32)
+        return repeat_patterns
+
     def __call__(self, graph: Union[Data, HeteroData]):
         if not isinstance(graph["coords"], torch.Tensor):
             graph["coords"] = torch.Tensor(graph["coords"][0])
@@ -47,6 +99,8 @@ class NodeFeatureFormatter(BaseTransform):
         # Add renamed y column if required
         if "graph_y" in graph:
             graph["y"] = graph["graph_y"]
+
+        graph = self.calculate_chemical_information(graph)
 
         return graph
 

@@ -10,6 +10,7 @@ from graphein.protein.graphs import construct_graph
 from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
 from torch_geometric.utils.convert import from_networkx
 from tqdm import tqdm
+from torch_geometric.data import Data
 
 from dataset.preprocessing import extract_compressed_file
 
@@ -18,7 +19,7 @@ NODE_METADATA_FUNCTIONS = [amino_acid_one_hot, meiler_embedding]
 
 
 class ProteinGraphDataset(Dataset):
-    raw_url = "https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/UP000000805_243232_METJA_v4.tar"
+    raw_url = "https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/UP000005640_9606_HUMAN_v4.tar"
 
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
