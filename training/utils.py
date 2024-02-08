@@ -11,7 +11,9 @@ from torch.utils.data import random_split
 from torch_geometric import seed_everything
 from torch_geometric.loader import DataLoader
 
-from dataset import ProteinGraphDataset
+from dataset import ProteinGraphDataset, NODE_METADATA_FUNCTIONS
+from dataset.preprocessing import NodeFeatureFormatter
+
 from models.c3dp import C3DPNet
 from training.logger import Logger
 from tqdm import tqdm
@@ -135,7 +137,6 @@ def train_model(args, config=None):
             args["optimizer"] = config["optimizer"]
             args["lr_scheduler"] = config["lr_scheduler"]
             args["n_epochs"] = config["n_epochs"]
-            args["use_sigmoid"] = config["use_sigmoid"]
 
         logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
 
@@ -149,7 +150,7 @@ def train_model(args, config=None):
 
         logger.log(f"Loading dataset....\n")
 
-        dataset = ProteinGraphDataset(root=args["data_root_dir"])
+        dataset = ProteinGraphDataset(root=args["data_root_dir"], pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
         logger.log(f"Loaded dataset: {dataset}\n"
                    f"==================\n"
                    f"Batch size: {args['batch_size']}\n"
@@ -203,6 +204,7 @@ def train_model(args, config=None):
                             in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
                             num_layers=args["num_layers"])
 
+        model = model.to("cuda" if torch.cuda.is_available() else "cpu")
         logger.log(f"Loaded model: {model}\n")
 
         optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])

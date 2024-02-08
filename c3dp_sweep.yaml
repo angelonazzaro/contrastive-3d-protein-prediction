@@ -9,7 +9,7 @@ parameters:
     min: 1e-8
     max: 1e-5
   batch_size:
-    values: [8, 12]
+    values: [12]
   hidden_channels: 
     values: [384, 512, 768]
   num_layers: 
@@ -26,7 +26,3 @@ parameters:
     values: ["Adam", "AdamW", "SGD"]
   lr_scheduler:
     values: ["LinearLR"]
-  use_sigmoid:
-    values: 
-      - True
-      - False

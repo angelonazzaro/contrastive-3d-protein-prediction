@@ -5,8 +5,9 @@ from argparse import ArgumentParser
 from functools import partial
 
 import yaml
-
+import torch
 import wandb
+
 from training.constants import *
 from training.utils import train_model
 
@@ -18,6 +19,8 @@ def main(args):
 
     if not args.tune_hyperparameters and args.weight_decay is None:
         raise Exception("You must set the weight decay (`weight_decay`) when training")
+
+    torch.set_float32_matmul_precision("medium")
 
     # run wandb sweep to tune hyperparameters
     if args.tune_hyperparameters:
