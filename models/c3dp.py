@@ -1,15 +1,15 @@
 from typing import Optional, Union
 
 import torch
-from torch import nn, device as torch_device
+from torch import nn
 from transformers import AutoTokenizer, AutoModel, BertConfig
 
-from models.constants import GRAPH_MODELS, DNA_MODEL, DNA_TOKENIZER, DNA_MAX_SEQUENCE_LENGTH, DNA_SEQUENCE_FEATURES, \
-    SUPPORTED_DNA_POOLING, GRAPH_EMBEDDING_POOLS
+from models.constants import DNA_MODEL, DNA_TOKENIZER, DNA_MAX_SEQUENCE_LENGTH, DNA_SEQUENCE_FEATURES, \
+    SUPPORTED_DNA_POOLING, GRAPH_EMBEDDING_POOLS, GRAPH_MODELS
 from models.loss import ContrastiveLoss
 
 
-class C3DPNet(nn.Module):
+class C3DPNet(torch.nn.Module):
     def __init__(self,
                  graph_model: str = "GraphSAGE",
                  dna_embeddings_pool: str = "mean",
@@ -42,7 +42,6 @@ class C3DPNet(nn.Module):
         self.dna_projection = nn.Linear(DNA_SEQUENCE_FEATURES, out_features_projection)
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
                                           else kwargs["dim_target"], out_features_projection)
-        self.device = torch_device('cpu', 0)
         self.__graph_model_name = graph_model
         self.__out_features_projection = self.__graph_model_name = graph_model
         self.__graph_embeddings_pool = graph_embeddings_pool
@@ -58,7 +57,7 @@ class C3DPNet(nn.Module):
         for primary_sequence in sequences_A:
             dna_inputs_list.append(self.dna_tokenizer(primary_sequence, return_tensors="pt", padding='max_length',
                                                       max_length=DNA_MAX_SEQUENCE_LENGTH, truncation=True)["input_ids"])
-        dna_inputs = torch.cat(dna_inputs_list).to(self.device)
+        dna_inputs = torch.cat(dna_inputs_list).to(self.dna_model.device)
         dna_hidden_states = self.dna_model(dna_inputs)[0]  # [batch_size, sequence_length, 768]
 
         dna_embeddings = getattr(dna_hidden_states, self.dna_embeddings_pool)(dim=1)  # expected shape [batch_size, 768]
@@ -77,19 +76,14 @@ class C3DPNet(nn.Module):
             return {"loss": output["loss"], "logits": output["logits"]}
         return output["loss"]
 
-    def to(self, device: str):
-        m = super().to(device)
-        self.device = next(m.parameters()).device
-        return m
-
-    def constructor_serializable_parameters(self) -> dict:      
+    def constructor_serializable_parameters(self) -> dict:
         return {
-            "graph_model": self.__graph_model_name, 
+            "graph_model": self.__graph_model_name,
             "dna_embeddings_pool": self.dna_embeddings_pool,
-            "graph_embeddings_pool": self.__graph_embeddings_pool, 
+            "graph_embeddings_pool": self.__graph_embeddings_pool,
             "use_sigmoid": self.loss.use_sigmoid,
             "out_features_projection": self.__out_features_projection,
-            "in_channels": self.graph_model.in_channels,  
-            "hidden_channels": self.graph_model.hidden_channels, 
+            "in_channels": self.graph_model.in_channels,
+            "hidden_channels": self.graph_model.hidden_channels,
             "num_layers": self.graph_model.num_layers,
         }

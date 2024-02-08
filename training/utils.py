@@ -9,6 +9,7 @@ import torch
 import wandb
 from torch.utils.data import random_split
 from torch_geometric import seed_everything
+from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
 
 from dataset import ProteinGraphDataset, NODE_METADATA_FUNCTIONS
@@ -82,7 +83,7 @@ class EarlyStopping:
         for filename in os.listdir(self.dir_path):
             if filename.endswith(p[1]):
                 os.remove(os.path.join(self.dir_path, filename))
-        
+
         torch.save(model.state_dict(), model_path)
         torch.save(model.constructor_serializable_parameters(), constructor_parameters_path)
         torch.save(optimizer.state_dict(), os.path.join(self.dir_path, optimizer_path))
@@ -166,7 +167,7 @@ def train_model(args, config=None):
         val_dataloader = DataLoader(val_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
 
         if args["in_channels"] is None:
-            args["in_channels"] = dataset.num_node_features
+            args["in_channels"] = 3
 
         logger.log(f"Loading model\n"
                    f"==================\n"
@@ -180,7 +181,7 @@ def train_model(args, config=None):
         early_stopping_monitor = EarlyStopping(patience=args["early_stopping_patience"], verbose=True,
                                                delta=args["early_stopping_delta"], path=checkpoint_saving_path,
                                                trace_func=logger.log)
-       
+
         if args["checkpoint_path"] is not None:
             checkpoint_dir = os.path.dirname(args["checkpoint_path"])
             # get graph model name
@@ -204,22 +205,28 @@ def train_model(args, config=None):
                             in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
                             num_layers=args["num_layers"])
 
-        model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:0" if torch.cuda.is_available()
+                              else "mps" if torch.backends.mps.is_available() else "cpu")
+        model = model.to(device)
+        print(next(model.parameters()).device)
+        print(next(model.dna_model.parameters()).device)
+        print(next(model.graph_model.parameters()).device)
         logger.log(f"Loaded model: {model}\n")
 
-        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
+        optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"],
+                                                            weight_decay=args["weight_decay"])
 
         if args["checkpoint_path"] is not None:
             logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
             optimizer.load_state_dict(optimizer_state_dict)
 
         lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
-        
+
         logger.log("Starting training...\n")
 
         for epoch in range(args["n_epochs"]):
             avg_train_loss, train_acc = train_epoch(model=model, train_dataloader=train_dataloader, optimizer=optimizer,
-                                         epoch=epoch, n_epochs=args["n_epochs"])
+                                                    epoch=epoch, n_epochs=args["n_epochs"])
 
             # validation step
             model.eval()
@@ -228,7 +235,7 @@ def train_model(args, config=None):
             progress_bar = tqdm(enumerate(val_dataloader), total=len(val_dataloader), file=sys.stdout,
                                 desc=f'Validation')
 
-            val_acc = 0
+            val_acc = torch.tensor(0)
             with torch.no_grad():
                 for batch_idx, data in progress_bar:
                     output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
@@ -244,9 +251,11 @@ def train_model(args, config=None):
 
             val_loss = val_loss / len(val_dataloader)
 
-            logger.log(f"Epoch {epoch + 1} out of {args['n_epochs']} - train_loss: {avg_train_loss:.6f} - train_acc: {train_acc:.6f} - "
-                       f"val_loss: {val_loss:.6f} - val_acc: {val_acc:.6f}")
-            wandb.log({"train_loss": avg_train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc, "epoch": epoch + 1})
+            logger.log(
+                f"Epoch {epoch + 1} out of {args['n_epochs']} - train_loss: {avg_train_loss:.6f} - train_acc: {train_acc:.6f} - "
+                f"val_loss: {val_loss:.6f} - val_acc: {val_acc:.6f}")
+            wandb.log({"train_loss": avg_train_loss, "train_acc": train_acc, "val_loss": val_loss, "val_acc": val_acc,
+                       "epoch": epoch + 1})
 
             early_stopping_monitor(model=model, val_loss=val_loss, optimizer=optimizer)
 
@@ -270,11 +279,15 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
     progress_bar = tqdm(enumerate(train_dataloader), total=num_batches, desc=f'Epoch {epoch + 1}/{n_epochs}',
                         file=sys.stdout)
 
-    train_acc = 0
+    train_acc = torch.tensor(0.0)
+    sequences = ["AAA", "TTT", "AAA", "CCCC", "AAAA", "GGGG", "AAAA", "GGGG"]
     model.train()
+    device = next(model.parameters()).device
     for batch_idx, data in progress_bar:
-        optimizer.zero_grad() # # Clear gradients
-        output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)  # forward pass + compute loss
+        data = data.to(device)
+        optimizer.zero_grad()  # # Clear gradients
+        output = model(data.x, data.edge_index, sequences, data.batch,
+                       return_dict=True)  # forward pass + compute loss
         cum_loss += output["loss"].item()
 
         output["loss"].backward()  # Derive gradients
