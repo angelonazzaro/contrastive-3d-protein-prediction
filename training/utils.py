@@ -207,7 +207,8 @@ def train_model(args, config=None):
 
         device = torch.device("cuda:0" if torch.cuda.is_available()
                               else "mps" if torch.backends.mps.is_available() else "cpu")
-        model = model.to(device)
+        dtype = None if device != "mps" else torch.float32
+        model = model.to(device, dtype=dtype)
         logger.log(f"Loaded model: {model}\n")
 
         optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"],
@@ -235,7 +236,7 @@ def train_model(args, config=None):
             val_acc = torch.tensor(0)
             with torch.no_grad():
                 for batch_idx, data in progress_bar:
-                    data = data.to(device)
+                    data = data.to(device, dtype)
                     output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
                     val_loss += output["loss"].item()
 
@@ -280,8 +281,9 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
     train_acc = torch.tensor(0.0)
     model.train()
     device = next(model.parameters()).device
+    dtype = next(model.parameters()).dtype
     for batch_idx, data in progress_bar:
-        data = data.to(device)
+        data = data.to(device, dtype)
         optimizer.zero_grad()  # # Clear gradients
         output = model(data.x, data.edge_index, data.sequence_A, data.batch,
                        return_dict=True)  # forward pass + compute loss

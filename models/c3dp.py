@@ -62,6 +62,14 @@ class C3DPNet(torch.nn.Module):
 
         dna_embeddings = getattr(dna_hidden_states, self.dna_embeddings_pool)(dim=1)  # expected shape [batch_size, 768]
 
+        # for some reason x, edge_index and batch tensors are moved back to cpu 
+        if x.device != dna_embeddings.device:
+            x = x.to(dna_embeddings.device)
+            edge_index = edge_index.to(dna_embeddings.device)
+            
+        if batch is not None:
+            batch = batch.to(dna_embeddings.device)
+
         graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
 
         if self.__graph_model_name != "DiffPool":
