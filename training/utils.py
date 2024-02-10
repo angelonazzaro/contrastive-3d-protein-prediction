@@ -167,7 +167,7 @@ def train_model(args, config=None):
         val_dataloader = DataLoader(val_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
 
         if args["in_channels"] is None:
-            args["in_channels"] = 3
+            args["in_channels"] = dataset.num_node_features
 
         logger.log(f"Loading model\n"
                    f"==================\n"
@@ -208,9 +208,6 @@ def train_model(args, config=None):
         device = torch.device("cuda:0" if torch.cuda.is_available()
                               else "mps" if torch.backends.mps.is_available() else "cpu")
         model = model.to(device)
-        print(next(model.parameters()).device)
-        print(next(model.dna_model.parameters()).device)
-        print(next(model.graph_model.parameters()).device)
         logger.log(f"Loaded model: {model}\n")
 
         optimizer = getattr(torch.optim, args["optimizer"])(model.parameters(), lr=args["learning_rate"],
@@ -238,6 +235,7 @@ def train_model(args, config=None):
             val_acc = torch.tensor(0)
             with torch.no_grad():
                 for batch_idx, data in progress_bar:
+                    data = data.to(device)
                     output = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
                     val_loss += output["loss"].item()
 
@@ -280,13 +278,12 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
                         file=sys.stdout)
 
     train_acc = torch.tensor(0.0)
-    sequences = ["AAA", "TTT", "AAA", "CCCC", "AAAA", "GGGG", "AAAA", "GGGG"]
     model.train()
     device = next(model.parameters()).device
     for batch_idx, data in progress_bar:
         data = data.to(device)
         optimizer.zero_grad()  # # Clear gradients
-        output = model(data.x, data.edge_index, sequences, data.batch,
+        output = model(data.x, data.edge_index, data.sequence_A, data.batch,
                        return_dict=True)  # forward pass + compute loss
         cum_loss += output["loss"].item()
 
