@@ -43,7 +43,8 @@ class C3DPNet(torch.nn.Module):
         self.graph_projection = nn.Linear(kwargs["hidden_channels"] if graph_model != "DiffPool"
                                           else kwargs["dim_target"], out_features_projection)
         self.__graph_model_name = graph_model
-        self.__out_features_projection = self.__graph_model_name = graph_model
+        self.__out_features_projection = out_features_projection
+        self.__graph_model_name = graph_model
         self.__graph_embeddings_pool = graph_embeddings_pool
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: Union[str, list[str]],
