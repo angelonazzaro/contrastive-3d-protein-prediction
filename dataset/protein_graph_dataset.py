@@ -1,20 +1,18 @@
+import glob
 import os
 import os.path as osp
-import glob
+from functools import partial
 
 import torch
+from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
+    expasy_protein_scale, add_bond_order, add_hydrogen_bond_interactions, add_peptide_bonds
 from graphein.protein.config import ProteinGraphConfig
 from graphein.protein.graphs import construct_graph
 from torch_geometric.data import Dataset, download_url, extract_zip, extract_gz, extract_tar
 from torch_geometric.utils.convert import from_networkx
 from tqdm import tqdm
-from torch_geometric.data import Data
 
-from functools import partial
-from graphein.protein import amino_acid_one_hot, meiler_embedding, add_aromatic_interactions, \
-add_atomic_edges, expasy_protein_scale, add_bond_order, add_k_nn_edges, add_hydrogen_bond_interactions, add_peptide_bonds
-
-from dataset.preprocessing import extract_compressed_file, NodeFeatureFormatter
+from dataset.preprocessing import extract_compressed_file, add_k_nn_edges
 
 EDGE_CONSTRUCTION_FUNCTIONS = [
     partial(add_k_nn_edges, long_interaction_threshold=0),
