@@ -138,6 +138,8 @@ def train_model(args, config=None):
             args["optimizer"] = config["optimizer"]
             args["lr_scheduler"] = config["lr_scheduler"]
             args["n_epochs"] = config["n_epochs"]
+            args["dna_embeddings_pool"] = config["dna_embeddings_pool"]
+            args["graph_embeddings_pool"] = config["graph_embeddings_pool"]
 
         logger = Logger(filepath=os.path.join(experiment_dir, "trainlog.txt"), mode="a")
 
@@ -151,7 +153,8 @@ def train_model(args, config=None):
 
         logger.log(f"Loading dataset....\n")
 
-        dataset = ProteinGraphDataset(root=args["data_root_dir"], pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
+        dataset = ProteinGraphDataset(root=args["data_root_dir"],
+                                      pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
         logger.log(f"Loaded dataset: {dataset}\n"
                    f"==================\n"
                    f"Batch size: {args['batch_size']}\n"
@@ -160,6 +163,7 @@ def train_model(args, config=None):
                    f"Number of edges features: {dataset.num_edge_features}\n"
                    f"Number of node features: {dataset.num_node_features}\n")
         train_split, val_split, test_split = get_splits(n_instances=len(dataset),
+
                                                         train_split_percentage=args["training_split_percentage"],
                                                         val_split_percentage=args["val_split_percentage"])
         train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])

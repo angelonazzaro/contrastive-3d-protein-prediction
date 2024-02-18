@@ -71,19 +71,21 @@ class ProteinGraphDataset(Dataset):
         os.unlink(file_path)
 
     def process(self):
-        config = ProteinGraphConfig(node_metadata_functions=list(NODE_METADATA_FUNCTIONS.values()), edge_construction_functions=EDGE_CONSTRUCTION_FUNCTIONS)
+        config = ProteinGraphConfig(node_metadata_functions=list(NODE_METADATA_FUNCTIONS.values()),
+                                    edge_construction_functions=EDGE_CONSTRUCTION_FUNCTIONS)
 
         for idx, raw_path in enumerate(tqdm(self.raw_paths, desc="Processing files", unit="file")):
             filename = osp.basename(extract_compressed_file(raw_path))
             protein_name = filename.split('-')[1]
 
-            try: 
+            try:
                 pyg_graph = from_networkx(construct_graph(uniprot_id=protein_name, config=config, verbose=False))
 
-                torch.save(self.__apply_transform(pyg_graph, "pre_transform"), osp.join(self.processed_dir, f'data_{idx}.pt'))
+                torch.save(self.__apply_transform(pyg_graph, "pre_transform"),
+                           osp.join(self.processed_dir, f'data_{idx}.pt'))
             except:
                 pass
-            
+
             os.unlink(osp.join(self.raw_dir, filename))
 
     def len(self):
@@ -91,7 +93,7 @@ class ProteinGraphDataset(Dataset):
 
     def get(self, idx):
         return self.__apply_transform(torch.load(osp.join(self.processed_dir, f'data_{idx}.pt')), "transform")
-    
+
     def __apply_transform(self, sample, attr):
         attr = getattr(self, attr)
         if attr:
