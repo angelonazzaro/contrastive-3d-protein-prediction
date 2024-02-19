@@ -63,6 +63,9 @@ class C3DPNet(torch.nn.Module):
 
         dna_embeddings = getattr(dna_hidden_states, self.dna_embeddings_pool)(dim=1)  # expected shape [batch_size, 768]
 
+        if self.dna_embeddings_pool == "max":
+            dna_embeddings = dna_embeddings[0]
+
         # for some reason x, edge_index and batch tensors are moved back to cpu 
         if x.device != dna_embeddings.device:
             x = x.to(dna_embeddings.device)
