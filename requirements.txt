@@ -5,7 +5,6 @@ beautifulsoup4==4.12.2
 biopandas==0.5.1.dev0
 biopython==1.82
 bioservices==1.11.2
-bayesian-optimization==1.4.3
 biovec==0.2.7
 cattrs==23.2.3
 certifi==2023.11.17

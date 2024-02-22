@@ -48,6 +48,14 @@ if __name__ == "__main__":
     parser.add_argument("--in_channels", type=int, default=None)
     parser.add_argument("--hidden_channels", type=int, default=10)
     parser.add_argument("--num_layers", type=int, default=3)
+    parser.add_argument("--dim_embedding", type=int, default=None,
+                        help="Dimensionality of the embeddings for DiffPool")
+    parser.add_argument("--no_new_clusters", type=int, default=None,
+                        help="Number of the of clusters after pooling for DiffPool")
+    parser.add_argument("--depth", type=int, default=None,
+                        help="Number of nodes to consider when pooling for GraphUNet")
+    parser.add_argument("--out_channels", type=int, default=None,
+                        help="Size of each output sample for GraphUNet")
     parser.add_argument("--training_split_percentage", type=float, default=TRAINING_SPLIT_PERCENTAGE)
     parser.add_argument("--val_split_percentage", type=int, default=VALIDATION_SPLIT_PERCENTAGE)
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE)

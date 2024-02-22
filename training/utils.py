@@ -201,13 +201,35 @@ def train_model(args, config=None):
             logger.log(f"Loading model state_dict from checkpoint: {args['checkpoint_path']}\n")
             model.load_state_dict(torch.load(args["checkpoint_path"]))
         else:
+            gnn_parameters = {}
+
+            if args["graph_model"] != "DiffPool" and args["graph_model"] != "GraphUnet":
+                gnn_parameters = {
+                    "in_channels": args["in_channels"],
+                    "hidden_channels": args["hidden_channels"],
+                    "num_layers": args["num_layers"]
+                }
+            elif args["graph_model"] == "DiffPool":
+                gnn_parameters = {
+                    "dim_input": args["in_channels"],
+                    "dim_hidden": args["hidden_channels"],
+                    "dim_embedding": args["dim_embedding"],
+                    "no_new_clusters": args["no_new_clusters"]
+                }
+            else:
+                gnn_parameters = {
+                    "in_channels": args["in_channels"],
+                    "hidden_channels": args["hidden_channels"],
+                    "out_channels": args["out_channels"],
+                    "depth": args["depth"]
+                }
+
             model = C3DPNet(graph_model=args["graph_model"],
                             dna_embeddings_pool=args["dna_embeddings_pool"],
                             graph_embeddings_pool=args["graph_embeddings_pool"],
                             out_features_projection=args["out_features_projection"],
                             use_sigmoid=args["use_sigmoid"],
-                            in_channels=args["in_channels"], hidden_channels=args["hidden_channels"],
-                            num_layers=args["num_layers"])
+                            **gnn_parameters)
 
         device = torch.device("cuda:0" if torch.cuda.is_available()
                               else "mps" if torch.backends.mps.is_available() else "cpu")
