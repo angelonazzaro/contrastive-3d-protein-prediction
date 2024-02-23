@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import time
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import torch
@@ -119,6 +119,24 @@ def get_splits(n_instances: int, train_split_percentage: float, val_split_percen
     return train_split, val_split, test_split
 
 
+def load_model_checkpoint(checkpoint_path: str, device: torch.device, load_optimizer: bool = False) \
+        -> Union[Tuple[dict, dict, dict], Tuple[dict, dict]]:
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    # get graph model name
+    graph_model_name = os.path.basename(checkpoint_path).split("-")[0]
+    ext = os.path.splitext(checkpoint_path)[1]
+    # get constructor parameters
+    constructor_parameters = torch.load(os.path.join(checkpoint_dir, f"{graph_model_name}-parameters{ext}"))
+    model_state_dict = torch.load(checkpoint_path, map_location=device)
+
+    if load_optimizer:
+        # get optimizer checkpoint
+        return model_state_dict, constructor_parameters, \
+            torch.load(os.path.join(checkpoint_dir, f"optimizer-state-dict{ext}"), map_location=device)
+
+    return model_state_dict, constructor_parameters
+
+
 def train_model(args, config=None):
     with wandb.init(name=args["run_name"] if args["run_name"] is not None else args['graph_model'].lower(),
                     config=config):
@@ -163,7 +181,6 @@ def train_model(args, config=None):
                    f"Number of edges features: {dataset.num_edge_features}\n"
                    f"Number of node features: {dataset.num_node_features}\n")
         train_split, val_split, test_split = get_splits(n_instances=len(dataset),
-
                                                         train_split_percentage=args["training_split_percentage"],
                                                         val_split_percentage=args["val_split_percentage"])
         train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
@@ -186,20 +203,17 @@ def train_model(args, config=None):
                                                delta=args["early_stopping_delta"], path=checkpoint_saving_path,
                                                trace_func=logger.log)
 
-        if args["checkpoint_path"] is not None:
-            checkpoint_dir = os.path.dirname(args["checkpoint_path"])
-            # get graph model name
-            graph_model_name = os.path.basename(args["checkpoint_path"]).split("-")[0]
-            ext = os.path.splitext(args["checkpoint_path"])[1]
-            # get constructor parameters 
-            constructor_parameters = torch.load(os.path.join(checkpoint_dir, f"{graph_model_name}-parameters{ext}"))
-            # get optimizer checkpoint
-            optimizer_state_dict = torch.load(os.path.join(checkpoint_dir, f"optimizer-state-dict{ext}"))
+        device = torch.device("cuda:0" if torch.cuda.is_available()
+                              else "mps" if torch.backends.mps.is_available() else "cpu")
+        dtype = None if device != "mps" else torch.float32
 
+        if args["checkpoint_path"] is not None:
+            model_state_dict, constructor_parameters, optimizer_state_dict = \
+                load_model_checkpoint(args["checkpoint_path"], device=device, load_optimizer=True)
             logger.log(f"Loading model from checkpoint with arguments: {constructor_parameters}\n")
             model = C3DPNet(**constructor_parameters)
             logger.log(f"Loading model state_dict from checkpoint: {args['checkpoint_path']}\n")
-            model.load_state_dict(torch.load(args["checkpoint_path"]))
+            model.load_state_dict(model_state_dict)
         else:
             gnn_parameters = {}
 
@@ -211,10 +225,15 @@ def train_model(args, config=None):
                 }
             elif args["graph_model"] == "DiffPool":
                 gnn_parameters = {
-                    "dim_input": args["in_channels"],
-                    "dim_hidden": args["hidden_channels"],
-                    "dim_embedding": args["dim_embedding"],
-                    "no_new_clusters": args["no_new_clusters"]
+                    "dim_features": args["in_channels"],
+                    "dim_target": args["hidden_channels"],
+                    "config": {
+                        "num_layers": args["num_layers"],
+                        'dim_embedding': args["dim_embedding"],
+                        'gnn_dim_hidden': args["gnn_dim_hidden"],
+                        'dim_embedding_MLP': args["dim_embedding_MLP"],
+                        "max_num_nodes": args["max_num_nodes"]
+                    }
                 }
             else:
                 gnn_parameters = {
@@ -231,9 +250,6 @@ def train_model(args, config=None):
                             use_sigmoid=args["use_sigmoid"],
                             **gnn_parameters)
 
-        device = torch.device("cuda:0" if torch.cuda.is_available()
-                              else "mps" if torch.backends.mps.is_available() else "cpu")
-        dtype = None if device != "mps" else torch.float32
         model = model.to(device, dtype=dtype)
         logger.log(f"Loaded model: {model}\n")
 
@@ -242,7 +258,7 @@ def train_model(args, config=None):
 
         if args["checkpoint_path"] is not None:
             logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
-            optimizer.load_state_dict(optimizer_state_dict)
+            optimizer.load_state_dict(optimizer_state_dict, map_location=device)
 
         lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
 

@@ -124,6 +124,10 @@ class DiffPool(GraphClassifier):
         dim_embedding = config['dim_embedding']  # embedding size of 3rd SAGE convolutions (eq. 5, dim of Z)
         dim_embedding_MLP = config['dim_embedding_MLP']  # hidden neurons of last 2 MLP layers
 
+        config['dim_features'] = dim_features
+        config['gnn_dim_hidden'] = gnn_dim_hidden
+
+        self.config = config
         self.num_diffpool_layers = num_diffpool_layers
 
         # Reproduce paper choice about coarse factor

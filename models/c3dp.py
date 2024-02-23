@@ -89,13 +89,31 @@ class C3DPNet(torch.nn.Module):
         return output["loss"]
 
     def constructor_serializable_parameters(self) -> dict:
-        return {
+
+        parameters = {
             "graph_model": self.__graph_model_name,
             "dna_embeddings_pool": self.dna_embeddings_pool,
             "graph_embeddings_pool": self.__graph_embeddings_pool,
             "use_sigmoid": self.loss.use_sigmoid,
             "out_features_projection": self.__out_features_projection,
-            "in_channels": self.graph_model.in_channels,
-            "hidden_channels": self.graph_model.hidden_channels,
-            "num_layers": self.graph_model.num_layers,
         }
+
+        if self.__graph_model_name != "DiffPool" and self.__graph_model_name != "GraphUNet":
+            parameters.update({
+                "in_channels": self.graph_model.in_channels,
+                "hidden_channels": self.graph_model.hidden_channels,
+                "num_layers": self.graph_model.num_layers,
+            })
+        elif self.__graph_model_name == "DiffPool":
+            parameters.update({
+                   "config": self.graph_model.config
+            })
+        else:
+            parameters.update({
+                "in_channels": self.graph_model.in_channels,
+                "hidden_channels": self.graph_model.hidden_channels,
+                "out_channels": self.graph_model.out_channels,
+                "depth": self.graph_model.depth
+            })
+
+        return parameters

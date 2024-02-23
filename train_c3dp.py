@@ -48,10 +48,14 @@ if __name__ == "__main__":
     parser.add_argument("--in_channels", type=int, default=None)
     parser.add_argument("--hidden_channels", type=int, default=10)
     parser.add_argument("--num_layers", type=int, default=3)
-    parser.add_argument("--dim_embedding", type=int, default=None,
+    parser.add_argument("--dim_embedding", type=int, default=128,
                         help="Dimensionality of the embeddings for DiffPool")
-    parser.add_argument("--no_new_clusters", type=int, default=None,
-                        help="Number of the of clusters after pooling for DiffPool")
+    parser.add_argument("--gnn_dim_hidden", type=int, default=64,
+                        help="Dimensionality of the GNN embeddings for DiffPool")
+    parser.add_argument("--dim_embedding_MLP", type=int, default=50,
+                        help="Dimensionality of the MLP embeddings for DiffPool")
+    parser.add_argument("--max_num_nodes", type=int, default=2699,
+                        help="Max number of nodes to consider for DiffPool")
     parser.add_argument("--depth", type=int, default=None,
                         help="Number of nodes to consider when pooling for GraphUNet")
     parser.add_argument("--out_channels", type=int, default=None,
