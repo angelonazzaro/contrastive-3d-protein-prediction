@@ -7,6 +7,7 @@ data/
 .DS_Store/
 
 /wandb/
+/eval_results/
 /experiments/
 
 dataset/UP000000805_243232_METJA_v4
