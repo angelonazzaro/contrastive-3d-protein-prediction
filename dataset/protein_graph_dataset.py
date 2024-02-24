@@ -45,7 +45,7 @@ class ProteinGraphDataset(Dataset):
             return []
 
         return [filename for filename in os.listdir(self.raw_dir)
-                if osp.isfile(osp.join(self.raw_dir, filename)) and filename.endswith(".pt")]
+                if osp.isfile(osp.join(self.raw_dir, filename)) and filename.endswith(".pdb.gz")]
 
     @property
     def processed_file_names(self):
