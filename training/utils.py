@@ -1,7 +1,5 @@
 import os
-import re
 import sys
-import time
 from typing import Tuple, Union
 
 import numpy as np
@@ -9,15 +7,13 @@ import torch
 import wandb
 from torch.utils.data import random_split
 from torch_geometric import seed_everything
-from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
+from tqdm import tqdm
 
 from dataset import ProteinGraphDataset, NODE_METADATA_FUNCTIONS
 from dataset.preprocessing import NodeFeatureFormatter
-
 from models.c3dp import C3DPNet
 from training.logger import Logger
-from tqdm import tqdm
 
 
 # All credits go to Bjarten and the other contributors: https://github.com/Bjarten/early-stopping-pytorch.git
