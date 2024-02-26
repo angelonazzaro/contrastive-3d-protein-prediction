@@ -56,6 +56,7 @@ for i in range(10):
                 continue
 
             pyg_graph = n(pyg_graph)
+            pyg_graph.y = torch.tensor([i])
             torch.save(pyg_graph, os.path.join(out_dir, f"{pdb_code}.pt"))
             idx += 1
             os.unlink(pdb_path)
