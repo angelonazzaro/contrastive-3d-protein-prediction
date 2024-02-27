@@ -37,6 +37,7 @@ out_dir = os.path.join(os.getcwd(), "dataset")
 os.makedirs(out_dir, exist_ok=True)
 idx = 0
 n = NodeFeatureFormatter()
+
 for i in range(10):
     # open the file
     filename = f"amino_fold_{i}.txt"
@@ -46,8 +47,10 @@ for i in range(10):
             pdb_code = line.strip()
             pdb_file = get_pdb_file(pdb_code)
             pdb_path = os.path.join(out_dir, f"{pdb_code}.pdb")
+
             with open(pdb_path, "w") as file:
                 file.write(pdb_file)
+
             try:
                 pyg_graph = from_networkx(construct_graph(path=pdb_path, verbose=False))
             except:
@@ -55,12 +58,20 @@ for i in range(10):
                 os.unlink(pdb_path)
                 continue
 
+            # Check for sequence_A, sequence_B, and sequence_L
+            if 'sequence_B' in pyg_graph.keys() and 'sequence_A' not in pyg_graph.keys():
+                pyg_graph['sequence_A'] = pyg_graph['sequence_B']
+                del pyg_graph['sequence_B']
+            elif 'sequence_L' in pyg_graph.keys() and 'sequence_A' not in pyg_graph.keys():
+                pyg_graph['sequence_A'] = pyg_graph['sequence_L']
+                del pyg_graph['sequence_L']
+
             pyg_graph = n(pyg_graph)
             pyg_graph.y = torch.tensor([i])
             torch.save(pyg_graph, os.path.join(out_dir, f"{pdb_code}.pt"))
             idx += 1
             os.unlink(pdb_path)
 
-with open(os.path.join(out_dir, "failed.txt")) as f:
+with open(os.path.join(out_dir, "failed.txt"), "w") as f:
     for s in failed_enzymes:
         f.write(f"{s}\n")
