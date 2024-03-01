@@ -77,16 +77,13 @@ def evaluate_fold(model: torch.nn.Module, device: torch.device, dtype: torch.dty
         file_path = os.path.join(fold_classification_dir, filename)
 
         # Check if it is a file (not a subdirectory)
-        if os.path.isfile(file_path):
+        if os.path.isfile(file_path) and ".txt" not in file_path:
             # Load data using torch.load and append to the list
             data_list.append(torch.load(file_path))
     dataloader = DataLoader(data_list, batch_size=batch_size)
 
     progress_bar = tqdm(enumerate(dataloader), total=len(dataloader), file=sys.stdout,
                         desc=f'Testing')
-
-    for data in data_list:
-        print(data)
 
     with torch.no_grad():
         for batch_idx, data in progress_bar:
@@ -153,7 +150,7 @@ def main(args):
     if not os.path.exists(args.scores_dir):
         os.makedirs(args.scores_dir)
 
-    with open(scores_path, "w") as sf:
+    with open(scores_path, "a") as sf:
         sf.write("{:s}\t{:s}\n".format(model_basename,
                                        "\t".join(["{:s}: {:.3f}".format(k, s) for k, s in scores.items()])))
 

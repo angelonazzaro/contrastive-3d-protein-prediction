@@ -6,6 +6,7 @@ GRAPH_MODELS = {
     "GraphSAGE": GraphSAGE,
     "GIN": GIN,
     "GAT": GAT,
+    "GCN": GCN,
     "GraphUNet": GraphUNet,
     "DiffPool": DiffPool
 }
