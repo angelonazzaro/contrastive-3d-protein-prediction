@@ -59,12 +59,16 @@ for i in range(10):
                 continue
 
             # Check for sequence_A, sequence_B, and sequence_L
-            if 'sequence_B' in pyg_graph.keys() and 'sequence_A' not in pyg_graph.keys():
-                pyg_graph['sequence_A'] = pyg_graph['sequence_B']
-                del pyg_graph['sequence_B']
-            elif 'sequence_L' in pyg_graph.keys() and 'sequence_A' not in pyg_graph.keys():
-                pyg_graph['sequence_A'] = pyg_graph['sequence_L']
-                del pyg_graph['sequence_L']
+            sequences = [key for key in pyg_graph.keys() if "sequence_" in key]
+
+            if "sequence_A" not in sequences:
+                pyg_graph["sequence_A"] = ""
+                for sequence in sequences:
+                    pyg_graph["sequence_A"] += pyg_graph[sequence]
+
+            for sequence in sequences:
+                if "sequence_A" != sequence:
+                    del pyg_graph[sequence]
 
             pyg_graph = n(pyg_graph)
             pyg_graph.y = torch.tensor([i])

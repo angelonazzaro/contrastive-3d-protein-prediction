@@ -67,7 +67,8 @@ def evaluate_fold(model: torch.nn.Module, device: torch.device, dtype: torch.dty
     running_precision: float = 0
     running_recall: float = 0
 
-    proj = torch.nn.Linear(3, model.graph_model.in_channels)
+    proj_x = torch.nn.Linear(3, model.graph_model.in_channels)
+    proj_l = torch.nn.Linear(batch_size, n_classes)
 
     fold_classification_dir = os.path.join(os.getcwd(), "evaluation/fold_classification/dataset")
     data_list = []
@@ -88,9 +89,9 @@ def evaluate_fold(model: torch.nn.Module, device: torch.device, dtype: torch.dty
     with torch.no_grad():
         for batch_idx, data in progress_bar:
             data = data.to(device, dtype)
-            data.x = proj(data.x)
+            data.x = proj_x(data.x)
             outputs = model(data.x, data.edge_index, data.sequence_A, data.batch, return_dict=True)
-            acc, prec, rec, f1 = compute_metrics(logits=outputs["logits"], ground_truth=data.y,
+            acc, prec, rec, f1 = compute_metrics(logits=proj_l(outputs["logits"]), ground_truth=data.y,
                                                  n_classes=n_classes, batch_size=batch_size)
 
             running_precision = running_precision + 1 / (batch_idx + 1) * (prec - running_precision)
