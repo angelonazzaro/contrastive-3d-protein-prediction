@@ -59,7 +59,7 @@ def evaluate_proteins(model: torch.nn.Module, device: torch.device, dtype: torch
 
 
 def evaluate_fold(model: torch.nn.Module, device: torch.device, dtype: torch.dtype,
-                      training_split_percentage: float, val_split_percentage: float, batch_size: int):
+                  training_split_percentage: float, val_split_percentage: float, batch_size: int):
     n_classes = 10
 
     running_accuracy: float = 0
@@ -140,10 +140,18 @@ def main(args):
 
     model.eval()
 
-    scores = EVALUATION_DATASETS[args.dataset](model=model, device=device, dtype=dtype,
-                                               batch_size=args.batch_size,
-                                               training_split_percentage=args.training_split_percentage,
-                                               val_split_percentage=args.val_split_percentage)
+    scores = {}
+
+    if args.dataset == "proteins":
+        scores = evaluate_proteins(model=model, device=device, dtype=dtype,
+                                   batch_size=args.batch_size,
+                                   training_split_percentage=args.training_split_percentage,
+                                   val_split_percentage=args.val_split_percentage)
+    elif args.dataset == "fold":
+        scores = evaluate_fold(model=model, device=device, dtype=dtype,
+                               batch_size=args.batch_size,
+                               training_split_percentage=args.training_split_percentage,
+                               val_split_percentage=args.val_split_percentage)
 
     model_basename = args.model_basename if args.model_basename else get_model_basename(args.model_checkpoint)
     scores_path = os.path.join(args.scores_dir, args.scores_file)

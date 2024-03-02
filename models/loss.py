@@ -14,9 +14,8 @@ class ContrastiveLoss(torch.nn.Module):
         self.temperature = torch.nn.Parameter(torch.tensor(0.07) if not use_sigmoid else torch.log(torch.tensor(10)))
         self.use_sigmoid = use_sigmoid
 
-        if use_sigmoid: 
+        if use_sigmoid:
             self.bias = torch.nn.Parameter(torch.tensor(-10.0))
-
 
     def forward(self, graph_embeddings: torch.Tensor, dna_embeddings: torch.Tensor):
         """
@@ -38,14 +37,14 @@ class ContrastiveLoss(torch.nn.Module):
             logits = torch.matmul(graph_embeddings, dna_embeddings.t()) * self.temperature + self.bias
             labels = 2 * torch.eye(len(logits)) - torch.ones(len(logits))
             loss = -F.logsigmoid(labels * logits).sum() / len(logits)
-        else: 
+        else:
             # Compute the similarity matrix (dot product)
             logits_per_graph = torch.matmul(graph_embeddings, dna_embeddings.t()) * torch.exp(self.temperature)
             labels = torch.arange(len(logits_per_graph), device=logits_per_graph.device)
-            
+
             graph_loss = F.cross_entropy(logits_per_graph, labels)
             dna_loss = F.cross_entropy(logits_per_graph.t(), labels)
-            
+
             loss = (graph_loss + dna_loss) / 2.0
 
         return {"loss": loss, "labels": labels, "logits": logits_per_graph if not self.use_sigmoid else logits}

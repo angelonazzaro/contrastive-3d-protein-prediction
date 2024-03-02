@@ -47,15 +47,13 @@ class C3DPNet(torch.nn.Module):
         self.__graph_model_name = graph_model
         self.__graph_embeddings_pool = graph_embeddings_pool
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences_A: Union[str, list[str]],
-                batch: Optional[torch.Tensor] = None, return_dict: bool = False):
-
+    def encode_dna_sequence(self, sequences: Union[str, list[str]]):
         dna_inputs_list = []
 
-        if isinstance(sequences_A, str):
-            sequences_A = [sequences_A]
+        if isinstance(sequences, str):
+            sequences = [sequences]
 
-        for primary_sequence in sequences_A:
+        for primary_sequence in sequences:
             dna_inputs_list.append(self.dna_tokenizer(primary_sequence, return_tensors="pt", padding='max_length',
                                                       max_length=DNA_MAX_SEQUENCE_LENGTH, truncation=True)["input_ids"])
         dna_inputs = torch.cat(dna_inputs_list).to(self.dna_model.device)
@@ -66,6 +64,20 @@ class C3DPNet(torch.nn.Module):
         if self.dna_embeddings_pool == "max":
             dna_embeddings = dna_embeddings[0]
 
+        return dna_embeddings
+
+    def encode_graph(self, x: torch.Tensor, edge_index: torch.Tensor, batch: Optional[torch.Tensor] = None):
+        graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
+
+        if self.__graph_model_name != "DiffPool":
+            graph_embeddings = self.graph_embeddings_pool(x=graph_embeddings, batch=batch)
+
+        return graph_embeddings
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, sequences: Union[str, list[str]],
+                batch: Optional[torch.Tensor] = None, return_dict: bool = False):
+        dna_embeddings = self.encode_dna_sequence(sequences)
+
         # for some reason x, edge_index and batch tensors are moved back to cpu 
         if x.device != dna_embeddings.device:
             x = x.to(dna_embeddings.device)
@@ -74,13 +86,10 @@ class C3DPNet(torch.nn.Module):
         if batch is not None:
             batch = batch.to(dna_embeddings.device)
 
-        if x.shape[0] != self.graph_model.in_channels: 
-            x = torch.nn.Linear(x.shape[0], graph_model.in_channels)(x)
+        if x.shape[1] != self.graph_model.in_channels:
+            x = torch.nn.Linear(x.shape[1], self.graph_model.in_channels)(x)
 
-        graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
-
-        if self.__graph_model_name != "DiffPool":
-            graph_embeddings = self.graph_embeddings_pool(x=graph_embeddings, batch=batch)
+        graph_embeddings = self.encode_graph(x=x, edge_index=edge_index, batch=batch)
 
         dna_embeddings = self.dna_projection(dna_embeddings)
         graph_embeddings = self.graph_projection(graph_embeddings)
