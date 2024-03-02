@@ -74,6 +74,9 @@ class C3DPNet(torch.nn.Module):
         if batch is not None:
             batch = batch.to(dna_embeddings.device)
 
+        if x.shape[0] != self.graph_model.in_channels: 
+            x = torch.nn.Linear(x.shape[0], graph_model.in_channels)(x)
+
         graph_embeddings = self.graph_model(x=x, edge_index=edge_index, batch=batch)
 
         if self.__graph_model_name != "DiffPool":

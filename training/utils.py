@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 
 import numpy as np
 import torch
@@ -133,6 +133,31 @@ def load_model_checkpoint(checkpoint_path: str, device: torch.device, load_optim
     return model_state_dict, constructor_parameters
 
 
+def load_dataset(dataset_name: str, data_root_dir: str, batch_size: int, training_split_percentage: int, 
+    val_split_percentage: int, shuffle: bool) -> Tuple[Union[ProteinGraphDataset, List], DataLoader, DataLoader]: 
+    dataset = []
+
+    if dataset_name == "proteins":
+        dataset = ProteinGraphDataset(root=args["data_root_dir"],
+                                        pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
+    else: 
+        for filename in os.listdir(data_root_dir):
+            file_path = os.path.join(data_root_dir, filename)
+
+            # Check if it is a file (not a subdirectory)
+            if os.path.isfile(file_path) and ".pt" in file_path:
+                # Load data using torch.load and append to the list
+                dataset.append(torch.load(file_path))
+    
+    train_split, val_split, test_split = get_splits(n_instances=len(dataset),
+                                                    train_split_percentage=training_split_percentage,
+                                                    val_split_percentage=val_split_percentage)
+    train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle)
+    val_dataloader = DataLoader(val_ds, batch_size=batch_size, shuffle=shuffle)
+
+    return dataset, train_dataloader, val_dataloader
+
 def train_model(args, config=None):
     with wandb.init(name=args["run_name"] if args["run_name"] is not None else args['graph_model'].lower(),
                     config=config):
@@ -167,24 +192,34 @@ def train_model(args, config=None):
 
         logger.log(f"Loading dataset....\n")
 
-        dataset = ProteinGraphDataset(root=args["data_root_dir"],
-                                      pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
-        logger.log(f"Loaded dataset: {dataset}\n"
-                   f"==================\n"
-                   f"Batch size: {args['batch_size']}\n"
-                   f"Dataset size: {len(dataset)} \n"
-                   f"Number of graphs size: {len(dataset)}\n"
-                   f"Number of edges features: {dataset.num_edge_features}\n"
-                   f"Number of node features: {dataset.num_node_features}\n")
-        train_split, val_split, test_split = get_splits(n_instances=len(dataset),
-                                                        train_split_percentage=args["training_split_percentage"],
-                                                        val_split_percentage=args["val_split_percentage"])
-        train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
-        train_dataloader = DataLoader(train_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
-        val_dataloader = DataLoader(val_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
+        dataset, train_dataloader, val_dataloader = load_dataset(dataset_name=args["dataset_name"], data_root_dir=args["data_root_dir"], 
+            batch_size=args["batch_size"], training_split_percentage=args["training_split_percentage"], val_split_percentage=args["val_split_percentage"], shuffle=args["shuffle"])
+
+        logger.log(f"Loaded dataset: {args['dataset_name']} \n"
+        f"==================\n"
+        f"Batch size: {args['batch_size']}\n"
+        f"Dataset size: {len(dataset)} \n")
+        # dataset = ProteinGraphDataset(root=args["data_root_dir"],
+        #                               pre_transform=NodeFeatureFormatter(list(NODE_METADATA_FUNCTIONS.keys())))
+        # logger.log(f"Loaded dataset: {dataset}\n"
+        #            f"==================\n"
+        #            f"Batch size: {args['batch_size']}\n"
+        #            f"Dataset size: {len(dataset)} \n"
+        #            f"Number of graphs size: {len(dataset)}\n"
+        #            f"Number of edges features: {dataset.num_edge_features}\n"
+        #            f"Number of node features: {dataset.num_node_features}\n")
+        # train_split, val_split, test_split = get_splits(n_instances=len(dataset),
+        #                                                 train_split_percentage=args["training_split_percentage"],
+        #                                                 val_split_percentage=args["val_split_percentage"])
+        # train_ds, val_ds, test_ds = random_split(dataset, [train_split, val_split, test_split])
+        # train_dataloader = DataLoader(train_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
+        # val_dataloader = DataLoader(val_ds, batch_size=args["batch_size"], shuffle=args["shuffle"])
 
         if args["in_channels"] is None:
-            args["in_channels"] = dataset.num_node_features
+            if isinstance(dataset, List):
+                args["in_channels"] = dataset[0].x.shape[0]
+            else:
+                args["in_channels"] = dataset.num_node_features
 
         logger.log(f"Loading model\n"
                    f"==================\n"
@@ -254,7 +289,7 @@ def train_model(args, config=None):
 
         if args["checkpoint_path"] is not None:
             logger.log(f"Loading optimizer state_dict from checkpoint: {args['checkpoint_path']}\n")
-            optimizer.load_state_dict(optimizer_state_dict, map_location=device)
+            optimizer.load_state_dict(optimizer_state_dict)
 
         lr_scheduler = getattr(torch.optim.lr_scheduler, args["lr_scheduler"])(optimizer)
 
@@ -320,6 +355,7 @@ def train_epoch(model: C3DPNet, train_dataloader: DataLoader, optimizer: torch.o
     model.train()
     device = next(model.parameters()).device
     dtype = next(model.parameters()).dtype
+
     for batch_idx, data in progress_bar:
         data = data.to(device, dtype)
         optimizer.zero_grad()  # # Clear gradients

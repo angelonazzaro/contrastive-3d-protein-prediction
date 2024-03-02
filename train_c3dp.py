@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
 
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--dataset_name", type=str, default="proteins")
     parser.add_argument("--data_root_dir", type=str, default=osp.join(os.getcwd(), "data"))
     parser.add_argument("--experiment_dir", type=str, default=osp.join(os.getcwd(), "experiments"))
     parser.add_argument("--checkpoint_path", type=str, default=None)
