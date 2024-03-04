@@ -30,7 +30,7 @@ The model uses a GNN-based graph-encoder to extract structural information from 
 information and contextual relationships from the DNA sequence.
 For the graph-encoder, we explored several architectures: GraphSAGE, GCN, GIN, and GAT.
 
-The representations extracted from the encoders are then approached through the use of contrastive loss described in the next section. 
+The representations extracted from the encoders are then approached through the use of the InfoNCE contrastive loss. 
 ## Results 
 
 In order to ascertain the effectiveness of the integration of the contrastive approach, we carried out a comparison between our best model and the corresponding GNN baseline. In this specific case, 
