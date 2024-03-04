@@ -5,12 +5,13 @@ from argparse import ArgumentParser
 import torch
 from torch.utils.data import random_split
 from torch_geometric import seed_everything
+from torch_geometric.nn import global_mean_pool
 
 from dataset import ProteinGraphDataset
 from evaluation.utils import get_model_basename, compute_metrics
 from models.c3dp import C3DPNet
 from training.constants import TRAINING_SPLIT_PERCENTAGE, BATCH_SIZE, VALIDATION_SPLIT_PERCENTAGE
-from training.utils import get_splits, load_model_checkpoint
+from training.utils import get_splits, load_model_checkpoint, load_dataset
 
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
@@ -109,16 +110,66 @@ def evaluate_fold(model: torch.nn.Module, device: torch.device, dtype: torch.dty
     }
 
 
-EVALUATION_DATASETS = {
-    "proteins": evaluate_proteins,
-    "fold": evaluate_fold
-}
+def evaluate_enz(model: torch.nn.Module, device: torch.device, dtype: torch.dtype,
+                 training_split_percentage: float, val_split_percentage: float, batch_size: int):
+    n_classes = 2
+
+    running_accuracy: float = 0
+    running_f1: float = 0
+    running_precision: float = 0
+    running_recall: float = 0
+
+    enz_classification_dir = os.path.join(os.getcwd(), "evaluation/enz_classification/dataset")
+    data_list = []
+
+    for filename in os.listdir(enz_classification_dir):
+        file_path = os.path.join(enz_classification_dir, filename)
+
+        # Check if it is a file (not a subdirectory)
+        if os.path.isfile(file_path) and ".txt" not in file_path:
+            # Load data using torch.load and append to the list
+            data_list.append(torch.load(file_path))
+
+    train_split, val_split, test_split = get_splits(n_instances=len(data_list),
+                                                    train_split_percentage=training_split_percentage,
+                                                    val_split_percentage=val_split_percentage)
+    train_ds, val_ds, test_ds = random_split(data_list, [train_split, val_split, test_split])
+    test_dataloader = DataLoader(test_ds, batch_size=batch_size)
+
+    progress_bar = tqdm(enumerate(test_dataloader), total=len(test_dataloader), file=sys.stdout,
+                        desc=f'Testing')
+
+    proj_x = torch.nn.Linear(data_list[0].x.shape[1], 91)
+
+    with torch.no_grad():
+        for batch_idx, data in progress_bar:
+            data = data.to(device, dtype)
+            data.x = proj_x(data.x)
+            node_logits = model.graph_model(data.x, data.edge_index, data.batch)
+            graph_logits = global_mean_pool(x=node_logits, batch=data.batch)
+            graph_logits = torch.nn.Linear(768, n_classes)(graph_logits)
+            acc, prec, rec, f1 = compute_metrics(logits=graph_logits, ground_truth=data.y,
+                                                 n_classes=n_classes, batch_size=batch_size, task='binary')
+
+            running_precision = running_precision + 1 / (batch_idx + 1) * (prec - running_precision)
+            running_recall = running_recall + 1 / (batch_idx + 1) * (rec - running_recall)
+            running_accuracy = running_accuracy + 1 / (batch_idx + 1) * (acc - running_accuracy)
+            running_f1 = running_f1 + 1 / (batch_idx + 1) * (f1 - running_f1)
+
+            torch.cuda.empty_cache()
+
+    return {
+        "accuracy": running_accuracy,
+        "precision": running_precision,
+        "f1": running_f1,
+        "recall": running_recall,
+    }
 
 
 def main(args):
-    if args.dataset not in EVALUATION_DATASETS:
+    if args.dataset not in ["proteins", "fold", "enzymes"]:
         raise ValueError(f"{args.dataset} not present in EVALUATION_DATASETS. Available datasets: "
-                         f"{EVALUATION_DATASETS.keys()}")
+                         f"proteins, fold, enzymes")
 
     print("Evaluating C3DP: Starting evaluation...")
     print(f"Seed Everything to {args.seed}")
@@ -127,8 +178,7 @@ def main(args):
 
     print(f"Loading checkpoint: {args.model_checkpoint} and dataset: {args.dataset}")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available()
-                          else "mps" if torch.backends.mps.is_available() else "cpu")
+    device = torch.device("cpu")
     dtype = None if device != "mps" else torch.float32
     model_state_dict, constructor_parameters = \
         load_model_checkpoint(args.model_checkpoint, device=device)
@@ -152,6 +202,11 @@ def main(args):
                                batch_size=args.batch_size,
                                training_split_percentage=args.training_split_percentage,
                                val_split_percentage=args.val_split_percentage)
+    else:
+        scores = evaluate_enz(model=model, device=device, dtype=dtype,
+                              batch_size=args.batch_size,
+                              training_split_percentage=args.training_split_percentage,
+                              val_split_percentage=args.val_split_percentage)
 
     model_basename = args.model_basename if args.model_basename else get_model_basename(args.model_checkpoint)
     scores_path = os.path.join(args.scores_dir, args.scores_file)

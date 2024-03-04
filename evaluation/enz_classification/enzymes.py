@@ -82,6 +82,24 @@ def process_enzymes(enzymes_data, out_dir):
             # Construct graph from PDB file
             pyg_graph = from_networkx(construct_graph(path=pdb_path, verbose=False))
             pyg_graph = n(pyg_graph)
+
+            # Check for sequence_A, sequence_B, and sequence_L
+            sequences = [key for key in pyg_graph.keys() if "sequence_" in key]
+
+            if "sequence_A" not in sequences:
+                pyg_graph["sequence_A"] = ""
+                for sequence in sequences:
+                    pyg_graph["sequence_A"] += pyg_graph[sequence]
+
+            for sequence in sequences:
+                if "sequence_A" != sequence:
+                    del pyg_graph[sequence]
+
+            if _ == "yes":
+                pyg_graph.y = torch.tensor(1)
+            else:
+                pyg_graph.y = torch.tensor(0)
+
             # Save the preprocessed graph as a PyTorch tensor
             torch.save(pyg_graph, os.path.join(out_dir, f"{pdb_code}.pt"))
         except KeyError:
