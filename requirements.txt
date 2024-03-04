@@ -78,7 +78,6 @@ pyparsing==3.1.1
 pypdb==2.3
 PyPrind==2.11.3
 python-dateutil==2.8.2
-pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@2f11ddc5ee7d6bd56f2fb6744a16776fab6536f7
 pytz==2023.3.post1
 PyYAML==6.0.1
 rdkit==2023.9.4
@@ -126,3 +125,4 @@ xmltodict==0.13.0
 yacs==0.1.8
 zope.event==5.0
 zope.interface==6.1
+pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@2f11ddc5ee7d6bd56f2fb6744a16776fab6536f7
