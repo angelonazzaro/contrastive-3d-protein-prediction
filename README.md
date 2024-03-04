@@ -2,7 +2,9 @@
 In this research, we explore a contrastive approach called C3DPNet, that combines Graph Neural Networks (GNNs) models to analyze 3D structures and natural language models, 
 such as DNABERT-2, to process primary sequences in order to to identify relevant features that correlate protein sequences and structures. 
 
-![c3dp-1](https://github.com/angelonazzaro/contrastive-3d-protein-prediction/assets/58223071/3df604bd-35a3-4501-a994-70fc82527552)
+<div style="text-align: center">
+ <img src="https://github.com/angelonazzaro/contrastive-3d-protein-prediction/assets/58223071/3df604bd-35a3-4501-a994-70fc82527552" alt="c3dp-1" style="width:75%;">
+</div>
 
 The model uses a GNN-based graph-encoder to extract structural information from graphs and a DNABERT-2-based text-encoder to acquire semantic 
 information and contextual relationships from the DNA sequence.
