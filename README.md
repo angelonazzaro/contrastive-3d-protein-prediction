@@ -9,14 +9,15 @@
 
 1. [Introduction](#introduction)
 2. [Results](#results)
-3. [Installation Guide](#installation-guide)
+3. [Models' weights](#models-weights)
+4. [Installation Guide](#installation-guide)
    - [Installing Python](#installing-python)
    - [Cloning the Repository](#cloning-the-repository)
    - [Creating the Virtual Environment](#creating-the-virtual-environment)
    - [Installing Requirements](#installing-requirements)
-4. [Training and Fine-Tuning](#training-and-fine-tuning)
-5. [Evaluating](#evaluating)
-6. [Citation](#citation)
+5. [Training and Fine-Tuning](#training-and-fine-tuning)
+6. [Evaluating](#evaluating)
+7. [Citation](#citation)
 
 # Introduction 
 In this research, we explore a contrastive approach called C3DPNet, that combines Graph Neural Networks (GNNs) models to analyze 3D structures and natural language models, 
@@ -44,6 +45,10 @@ our model demonstrates superior discriminative capabilities, highlighting the ef
 | C3DPNet  | **0.542** | **0.613** | **0.572** | **0.667** |
 | GSAGE    | 0.508    | 0.376     | 0.402    | 0.499  |
 
+# Models' weights
+Trained model weights can be found at the following MEGA link:
+
+   - https://mega.nz/folder/4nkzFIiK#8FpYSFPjtnXVyuF2whNNoQ
 
 # Installation Guide
 To install the necessary requirements for the project, please follow the steps below.
