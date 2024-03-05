@@ -10,6 +10,7 @@ data/
 /eval_results/
 /experiments/
 /evaluation/fold_classification/dataset
+/evaluation/enz_classification/dataset
 
 dataset/UP000000805_243232_METJA_v4
 dataset/dataset/processed
