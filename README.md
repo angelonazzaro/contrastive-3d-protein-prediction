@@ -1,6 +1,6 @@
 <div align="center">
 
-# Contrastive 3D Protein Prediction
+# Contrastive 3D Protein Prediction :dna: 
 
  [Angelo Nazzaro](https://github.com/angelonazzaro), [Luigina Costante](https://github.com/Luigina2001)
 </div>
