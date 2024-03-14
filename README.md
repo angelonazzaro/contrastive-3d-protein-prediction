@@ -176,7 +176,7 @@ To evaluate the model, run `evaluate_c3dp.net` with the desired parameters:
 
 If you have have found this work useful and have decided to include it in your work, please consider citing
 ```BibTeX
-@online{rsDatasetsHub,
+@online{nazzaro-costante2024:c3dp,
     author={Angelo Nazzaro, Luigina Costante}, 
     title = {Contrastive 3D Protein Prediction},
     url={https://github.com/angelonazzaro/contrastive-3d-protein-prediction},
