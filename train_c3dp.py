@@ -28,7 +28,7 @@ def main(args):
             sweep_config = yaml.load(f, Loader=yaml.FullLoader)
         sweep_id = wandb.sweep(sweep=sweep_config, project=args.project_name)
         sweep_config.update(vars(args))
-        wandb.agent(sweep_id, partial(train_model, vars(args)), count=args.sweep_count)
+        wandb.agent(sweep_id, partial(train_model, vars(args), sweep_config), count=args.sweep_count)
     else:
         train_model(args=vars(args))
 
